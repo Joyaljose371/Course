@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Each user can only read/write their own profile document.
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Admin status is never writable from the client. Promote a user to admin
+    // by creating a document here manually in the Firebase Console, with the
+    // document ID set to that user's UID (found under Authentication).
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Shared content: any signed-in user can read; only admins can write.
+    match /categories/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /topics/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /persons/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /quizQuestions/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /flashcards/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /researchSections/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
