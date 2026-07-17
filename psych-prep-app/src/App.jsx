@@ -363,6 +363,7 @@ function Theories({ dbData }) {
   const catOf = (id) => dbData.categories.find((c) => c.id === id) || { name: id, tint: T.brass };
   const list = useMemo(() => dbData.persons.filter((p) => filterCat === "all" || p.categoryId === filterCat), [dbData.persons, filterCat]);
   const toggleFlip = (id) => setFlipped((f) => ({ ...f, [id]: !f[id] }));
+  
   return (
     <div>
       <SectionHeading eyebrow="Biographical Index" title="Theories & Persons" />
@@ -370,7 +371,7 @@ function Theories({ dbData }) {
         <FilterChip label="All" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
       </div>
-      <p style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.textMuted, marginBottom: 18 }}>Tap a card to flip it and reveal the key idea.</p>
+      <p style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.textLight, marginBottom: 18 }}>Tap a card to flip it and reveal the key idea.</p>
       {list.length === 0 ? <EmptyState text="No entries in this category yet." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 16 }}>
           {list.map((p) => {
@@ -379,18 +380,39 @@ function Theories({ dbData }) {
             return (
               <div key={p.id} className={`card-flip ${isFlipped ? "flipped" : ""}`} style={{ perspective: 1000, height: 168, cursor: "pointer" }} onClick={() => toggleFlip(p.id)}>
                 <div className="card-flip-inner" style={{ position: "relative", width: "100%", height: "100%" }}>
+                  {/* FRONT FACE */}
                   <div className="card-face" style={{ position: "absolute", inset: 0 }}>
                     <IndexCard tint={cat.tint} style={{ height: "100%" }}>
-                      <CatalogStamp tint={cat.tint}>{p.field}</CatalogStamp>
+                      <CatalogStamp tint={cat.tint}>
+  <span style={{ color: "#121212" }}>{p.field}</span>
+</CatalogStamp>
                       <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginTop: 12 }}>{p.name}</div>
                       <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, color: T.inkSoft, marginTop: 6 }}>{p.years}</div>
                       <div style={{ position: "absolute", bottom: 12, right: 16, fontFamily: FONT_BODY, fontSize: 10.5, color: T.inkSoft }}>flip →</div>
                     </IndexCard>
                   </div>
-                  <div className="card-face card-back" style={{ position: "absolute", inset: 0 }}>
-                    <IndexCard tint={cat.tint} style={{ height: "100%" }}>
-                      <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>Key idea</div>
-                      <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.6 }}>{p.keyIdea}</div>
+                  {/* BACK FACE (With Scroll and click event propagation stop) */}
+                  <div 
+                    className="card-face card-back" 
+                    style={{ position: "absolute", inset: 0 }}
+                    onClick={(e) => {
+                      // Prevents clicking the scrollbar or text from accidentally flipping the card back
+                      e.stopPropagation(); 
+                    }}
+                  >
+                    <IndexCard tint={cat.tint} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexShrink: 0 }}>
+<div style={{ fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "#121212" }}>Key idea</div>                        {/* A tiny button to flip back since clicking the body is now caught */}
+                        <div 
+                          onClick={() => toggleFlip(p.id)} 
+                          style={{ fontFamily: FONT_BODY, fontSize: 10.5, color: T.inkSoft, padding: "2px 6px", background: "rgba(255,255,255,0.05)", borderRadius: 4 }}
+                        >
+                          ← back
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.6, overflowY: "auto", flexGrow: 1, paddingRight: 4 }}>
+                        {p.keyIdea}
+                      </div>
                     </IndexCard>
                   </div>
                 </div>
@@ -402,7 +424,6 @@ function Theories({ dbData }) {
     </div>
   );
 }
-
 /* ============================== RESEARCH METHODOLOGY ============================== */
 function ResearchMethodology({ dbData }) {
   const [openId, setOpenId] = useState(dbData.research[0]?.id);
