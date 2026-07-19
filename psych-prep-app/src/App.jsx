@@ -4,7 +4,7 @@ import {
   Bookmark, BookmarkCheck, Check, X, ChevronRight, ChevronLeft, ChevronDown,
   Search, RotateCcw, Award, BarChart2, GraduationCap, Home,
   CheckCircle2, XCircle, Sparkles, Shield, Plus, Trash2, Pencil, Lock,
-  LogOut, Save, User, Mail, UploadCloud,
+  LogOut, Save, User, Mail, UploadCloud, Download, Upload,
 } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import { useProfile, useIsAdmin } from "./hooks/useProfile";
@@ -363,7 +363,6 @@ function Theories({ dbData }) {
   const catOf = (id) => dbData.categories.find((c) => c.id === id) || { name: id, tint: T.brass };
   const list = useMemo(() => dbData.persons.filter((p) => filterCat === "all" || p.categoryId === filterCat), [dbData.persons, filterCat]);
   const toggleFlip = (id) => setFlipped((f) => ({ ...f, [id]: !f[id] }));
-  
   return (
     <div>
       <SectionHeading eyebrow="Biographical Index" title="Theories & Persons" />
@@ -371,7 +370,7 @@ function Theories({ dbData }) {
         <FilterChip label="All" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
       </div>
-      <p style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.textLight, marginBottom: 18 }}>Tap a card to flip it and reveal the key idea.</p>
+      <p style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.textMuted, marginBottom: 18 }}>Tap a card to flip it and reveal the key idea.</p>
       {list.length === 0 ? <EmptyState text="No entries in this category yet." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 16 }}>
           {list.map((p) => {
@@ -380,39 +379,18 @@ function Theories({ dbData }) {
             return (
               <div key={p.id} className={`card-flip ${isFlipped ? "flipped" : ""}`} style={{ perspective: 1000, height: 168, cursor: "pointer" }} onClick={() => toggleFlip(p.id)}>
                 <div className="card-flip-inner" style={{ position: "relative", width: "100%", height: "100%" }}>
-                  {/* FRONT FACE */}
                   <div className="card-face" style={{ position: "absolute", inset: 0 }}>
                     <IndexCard tint={cat.tint} style={{ height: "100%" }}>
-                      <CatalogStamp tint={cat.tint}>
-  <span style={{ color: "#121212" }}>{p.field}</span>
-</CatalogStamp>
+                      <CatalogStamp tint={cat.tint}>{p.field}</CatalogStamp>
                       <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginTop: 12 }}>{p.name}</div>
                       <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, color: T.inkSoft, marginTop: 6 }}>{p.years}</div>
                       <div style={{ position: "absolute", bottom: 12, right: 16, fontFamily: FONT_BODY, fontSize: 10.5, color: T.inkSoft }}>flip →</div>
                     </IndexCard>
                   </div>
-                  {/* BACK FACE (With Scroll and click event propagation stop) */}
-                  <div 
-                    className="card-face card-back" 
-                    style={{ position: "absolute", inset: 0 }}
-                    onClick={(e) => {
-                      // Prevents clicking the scrollbar or text from accidentally flipping the card back
-                      e.stopPropagation(); 
-                    }}
-                  >
-                    <IndexCard tint={cat.tint} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexShrink: 0 }}>
-<div style={{ fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "#121212" }}>Key idea</div>                        {/* A tiny button to flip back since clicking the body is now caught */}
-                        <div 
-                          onClick={() => toggleFlip(p.id)} 
-                          style={{ fontFamily: FONT_BODY, fontSize: 10.5, color: T.inkSoft, padding: "2px 6px", background: "rgba(255,255,255,0.05)", borderRadius: 4 }}
-                        >
-                          ← back
-                        </div>
-                      </div>
-                      <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.6, overflowY: "auto", flexGrow: 1, paddingRight: 4 }}>
-                        {p.keyIdea}
-                      </div>
+                  <div className="card-face card-back" style={{ position: "absolute", inset: 0 }}>
+                    <IndexCard tint={cat.tint} style={{ height: "100%" }}>
+                      <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>Key idea</div>
+                      <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.6 }}>{p.keyIdea}</div>
                     </IndexCard>
                   </div>
                 </div>
@@ -424,6 +402,7 @@ function Theories({ dbData }) {
     </div>
   );
 }
+
 /* ============================== RESEARCH METHODOLOGY ============================== */
 function ResearchMethodology({ dbData }) {
   const [openId, setOpenId] = useState(dbData.research[0]?.id);
@@ -609,9 +588,10 @@ const ADMIN_TABS = [
   { id: "categories", label: "Categories" }, { id: "topics", label: "Topics" },
   { id: "persons", label: "Theories & Persons" }, { id: "quiz", label: "Quiz Questions" },
   { id: "flashcards", label: "Flashcards" }, { id: "research", label: "Research Sections" },
+  { id: "importExport", label: "Import / Export" },
 ];
 
-function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent }) {
+function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent }) {
   const [tab, setTab] = useState("categories");
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState("");
@@ -640,6 +620,77 @@ function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, s
       {tab === "quiz" && <AdminQuiz dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} />}
       {tab === "flashcards" && <AdminFlashcards dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} />}
       {tab === "research" && <AdminResearch dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} />}
+      {tab === "importExport" && <AdminImportExport dbData={dbData} exportContent={exportContent} importContent={importContent} />}
+    </div>
+  );
+}
+
+function AdminImportExport({ dbData, exportContent, importContent }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null); // { tone: "ok" | "error", text }
+  const fileInputRef = React.useRef(null);
+
+  const totalItems = dbData.categories.length + dbData.topics.length + dbData.persons.length + dbData.quiz.length + dbData.flashcards.length + dbData.research.length;
+
+  const handleDownload = () => {
+    const data = exportContent();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `psych-catalog-content-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileChosen = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setBusy(true); setMessage(null);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const summary = await importContent(parsed);
+      const parts = Object.entries(summary).map(([k, v]) => `${v} ${k}`).join(", ");
+      setMessage({ tone: "ok", text: `Import complete — processed ${parts}.` });
+    } catch (err) {
+      setMessage({ tone: "error", text: err.message || "That file couldn't be imported. Make sure it's valid JSON in the expected format." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+      <div style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 10, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Download size={17} color={T.brass} />
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, color: T.textLight }}>Download full content</div>
+        </div>
+        <p style={{ fontFamily: FONT_BODY, fontSize: 13, color: T.textMuted, lineHeight: 1.6, marginBottom: 14 }}>
+          Exports every category, topic, theory/person, quiz question, flashcard, and research section — {totalItems} items total — as one JSON file. Useful as a backup, or to bulk-edit content in a text editor before re-importing.
+        </p>
+        <PrimaryButton onClick={handleDownload}><Download size={14} /> Download JSON</PrimaryButton>
+      </div>
+
+      <div style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 10, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Upload size={17} color={T.brass} />
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, color: T.textLight }}>Upload content file</div>
+        </div>
+        <p style={{ fontFamily: FONT_BODY, fontSize: 13, color: T.textMuted, lineHeight: 1.6, marginBottom: 14 }}>
+          Upload a JSON file in the same format as the download above. Items with an existing ID are updated in place; items without one are added as new. <strong>Import never deletes anything</strong> — remove unwanted items manually in the relevant tab.
+        </p>
+        <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={handleFileChosen} style={{ display: "none" }} />
+        <PrimaryButton onClick={() => fileInputRef.current?.click()} disabled={busy}><Upload size={14} /> {busy ? "Importing…" : "Choose file to upload"}</PrimaryButton>
+        {message && (
+          <div style={{ marginTop: 12, fontFamily: FONT_BODY, fontSize: 12.5, color: message.tone === "ok" ? T.sage : T.rust }}>{message.text}</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -830,13 +881,13 @@ function AdminFlashcards({ dbData, addItem, updateItem, deleteItem }) {
 }
 
 function AdminResearch({ dbData, addItem, updateItem, deleteItem }) {
-  const blank = { title: "", body: "", points: "" };
+  const blank = { title: "", body: "", points: "", order: "" };
   const { form, setForm, editingId, setEditingId, reset } = useEditableForm(blank);
-  const startEdit = (r) => { setForm({ title: r.title, body: r.body, points: r.points.join("\n") }); setEditingId(r.id); };
+  const startEdit = (r) => { setForm({ title: r.title, body: r.body, points: r.points.join("\n"), order: typeof r.order === "number" ? String(r.order) : "" }); setEditingId(r.id); };
   const submit = (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
-    const payload = { title: form.title.trim(), body: form.body.trim(), points: form.points.split("\n").map((s) => s.trim()).filter(Boolean) };
+    const payload = { title: form.title.trim(), body: form.body.trim(), points: form.points.split("\n").map((s) => s.trim()).filter(Boolean), order: form.order.trim() === "" ? null : parseInt(form.order, 10) };
     if (editingId) updateItem("research", editingId, payload); else addItem("research", payload);
     reset();
   };
@@ -844,6 +895,7 @@ function AdminResearch({ dbData, addItem, updateItem, deleteItem }) {
     <AdminShell formTitle={editingId ? "Edit section" : "Add a research methodology section"} form={
       <form onSubmit={submit}>
         <Field label="Section title"><TextInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Meta-Analysis" /></Field>
+        <Field label="Order (controls position in the ledger — lower shows first)"><TextInput type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="e.g. 7" /></Field>
         <Field label="Body text"><TextArea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Explain the concept" /></Field>
         <Field label="Bullet points (one per line)"><TextArea value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} placeholder={"Point one\nPoint two"} /></Field>
         <div style={{ display: "flex", gap: 8 }}><PrimaryButton type="submit">{editingId ? <><Save size={14} /> Save</> : <><Plus size={14} /> Add section</>}</PrimaryButton>{editingId && <GhostButton onClick={reset}>Cancel</GhostButton>}</div>
@@ -851,7 +903,10 @@ function AdminResearch({ dbData, addItem, updateItem, deleteItem }) {
     } list={dbData.research.map((r) => (
       <div key={r.id} style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 8, padding: "12px 14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight }}>{r.title}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.brass, minWidth: 18 }}>{typeof r.order === "number" ? r.order : "—"}</span>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight }}>{r.title}</div>
+          </div>
           <div style={{ display: "flex", gap: 6 }}><GhostButton onClick={() => startEdit(r)}><Pencil size={13} /> Edit</GhostButton><GhostButton danger onClick={() => { if (confirm(`Delete "${r.title}"?`)) deleteItem("research", r.id); }}><Trash2 size={13} /></GhostButton></div>
         </div>
       </div>
@@ -864,7 +919,7 @@ export default function App() {
   const { user, authLoaded, signUp, logIn, logOut } = useAuth();
   const { profile, loaded: profileLoaded, update, toggleBookmark, markRead, addQuizResult, setFlashcardStatus } = useProfile(user?.uid);
   const { isAdmin, loaded: adminLoaded } = useIsAdmin(user?.uid);
-  const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent } = useContentDB();
+  const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent } = useContentDB();
 
   const [active, setActive] = useState("dashboard");
   const [browseFilter, setBrowseFilter] = useState("all");
@@ -899,8 +954,9 @@ export default function App() {
             </div>
           </div>
           {loaded && !needsOnboarding && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_BODY, fontSize: 13, color: T.textLight }}><User size={14} color={T.textMuted} /> {profile.name}{isAdmin && <span style={{ color: T.brassLight, fontFamily: FONT_MONO, fontSize: 10.5, marginLeft: 4 }}>· ADMIN</span>}</div>
+              {!isAdmin && <UidHelper uid={user.uid} />}
               <GhostButton onClick={() => setShowFocusEdit(true)}>Edit focus</GhostButton>
               <GhostButton onClick={logOut}><LogOut size={13} /> Log out</GhostButton>
             </div>
@@ -921,7 +977,7 @@ export default function App() {
             {active === "research" && <ResearchMethodology dbData={dbData} />}
             {active === "quiz" && <Quiz dbData={dbData} addQuizResult={addQuizResult} />}
             {active === "flashcards" && <Flashcards dbData={dbData} profile={profile} setFlashcardStatus={setFlashcardStatus} />}
-            {active === "admin" && isAdmin && <AdminPanel dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} deleteCategory={deleteCategory} seedStarterContent={seedStarterContent} />}
+            {active === "admin" && isAdmin && <AdminPanel dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} deleteCategory={deleteCategory} seedStarterContent={seedStarterContent} exportContent={exportContent} importContent={importContent} />}
           </>
         )}
       </main>
