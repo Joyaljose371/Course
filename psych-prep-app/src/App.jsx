@@ -35,7 +35,7 @@ const FontLoader = () => (
     .psy-scroll::-webkit-scrollbar-track { background: transparent; }
     .card-flip-inner { transition: transform 0.5s; transform-style: preserve-3d; }
     .card-flip.flipped .card-flip-inner { transform: rotateY(180deg); }
-    .card-face { backface-visibility: hidden; }
+    .card-face { backface-visibility: hidden; overflow: hidden; }
     .card-back { transform: rotateY(180deg); }
     .psy-focus:focus-visible { outline: 2px solid ${T.brass}; outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .card-flip-inner { transition: none !important; } }
@@ -44,7 +44,7 @@ const FontLoader = () => (
 
 /* ============================== SHARED UI BITS ============================== */
 const CatalogStamp = ({ children, tint }) => (
-  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: tint || T.brass, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap" }}>{children}</span>
+  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, background: `${tint || T.brass}15`, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap" }}>{children}</span>
 );
 const PunchHole = () => (
   <div style={{ position: "absolute", top: 10, left: 10, width: 10, height: 10, borderRadius: "50%", background: T.bgDeep, boxShadow: `inset 0 0 0 1px ${T.ink}22` }} />
@@ -388,9 +388,9 @@ function Theories({ dbData }) {
                     </IndexCard>
                   </div>
                   <div className="card-face card-back" style={{ position: "absolute", inset: 0 }}>
-                    <IndexCard tint={cat.tint} style={{ height: "100%" }}>
-                      <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>Key idea</div>
-                      <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.6 }}>{p.keyIdea}</div>
+                    <IndexCard tint={cat.tint} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                      <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, marginBottom: 8 }}>Key idea</div>
+                      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.6, color: T.ink, wordBreak: "break-word" }}>{p.keyIdea}</div>
                     </IndexCard>
                   </div>
                 </div>
