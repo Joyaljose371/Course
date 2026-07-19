@@ -917,7 +917,7 @@ function AdminResearch({ dbData, addItem, updateItem, deleteItem }) {
 /* ============================== APP ============================== */
 export default function App() {
   const { user, authLoaded, signUp, logIn, logOut } = useAuth();
-  const { profile, loaded: profileLoaded, update, toggleBookmark, markRead, addQuizResult, setFlashcardStatus } = useProfile(user?.uid);
+  const { profile, loaded: profileLoaded, profileError, update, toggleBookmark, markRead, addQuizResult, setFlashcardStatus } = useProfile(user?.uid);
   const { isAdmin, loaded: adminLoaded } = useIsAdmin(user?.uid);
   const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent } = useContentDB();
 
@@ -955,8 +955,10 @@ export default function App() {
           </div>
           {loaded && !needsOnboarding && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_BODY, fontSize: 13, color: T.textLight }}><User size={14} color={T.textMuted} /> {profile.name}{isAdmin && <span style={{ color: T.brassLight, fontFamily: FONT_MONO, fontSize: 10.5, marginLeft: 4 }}>· ADMIN</span>}</div>
-              {!isAdmin && <UidHelper uid={user.uid} />}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_BODY, fontSize: 13, color: T.textLight }}>
+                <User size={14} color={T.textMuted} />
+                {isAdmin ? <span>{profile.name} <span style={{ color: T.brassLight, fontFamily: FONT_MONO, fontSize: 10.5, marginLeft: 4 }}>· ADMIN</span></span> : <span>Scholar</span>}
+              </div>
               <GhostButton onClick={() => setShowFocusEdit(true)}>Edit focus</GhostButton>
               <GhostButton onClick={logOut}><LogOut size={13} /> Log out</GhostButton>
             </div>
@@ -965,6 +967,12 @@ export default function App() {
       </header>
 
       <div style={{ marginTop: 16, position: "sticky", top: 0, zIndex: 10 }}><Nav active={active} setActive={setActive} isAdmin={isAdmin} /></div>
+
+      {profileError && (
+        <div style={{ maxWidth: 1080, margin: "16px auto 0", padding: "12px 16px", borderRadius: 8, background: `${T.rust}18`, border: `1px solid ${T.rust}44`, color: T.textLight, fontFamily: FONT_BODY, fontSize: 13.5 }}>
+          {profileError}
+        </div>
+      )}
 
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 20px 60px" }}>
         {!loaded ? (
