@@ -282,7 +282,7 @@ function generateShareImageBlob(profile, level) {
 
   ctx.font = "italic 32px Georgia, 'Times New Roman', serif";
   ctx.fillStyle = "#EDE7D6";
-  wrapCanvasText(ctx, "Studying psychology for NET / SET / JRF — join me on Psych Catalog! https://course-kappa-two.vercel.app/", 80, 850, 900, 44);
+  wrapCanvasText(ctx, "Studying psychology for NET / SET / JRF — join me on Psych Catalog!", 80, 850, 900, 44);
 
   ctx.font = "600 24px Arial, sans-serif";
   ctx.fillStyle = "#C9A227";
@@ -297,7 +297,7 @@ async function shareProgress(profile, level, setBusy, setError) {
   try {
     const blob = await generateShareImageBlob(profile, level);
     const file = new File([blob], "psych-catalog-streak.png", { type: "image/png" });
-    const shareText = `🔥 ${profile.streak.current}-day streak, ${profile.xp} XP as a ${level.name}! Studying psychology for NET/SET/JRF — join me on Psych Catalog.`;
+    const shareText = `🔥 ${profile.streak.current}-day streak, ${profile.xp} XP as a ${level.name}! Studying psychology for NET/SET/JRF — join me on Psych Catalog - https://course-kappa-two.vercel.app/.`;
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], title: "My Psych Catalog streak", text: shareText });
