@@ -282,7 +282,7 @@ function generateShareImageBlob(profile, level) {
 
   ctx.font = "italic 32px Georgia, 'Times New Roman', serif";
   ctx.fillStyle = "#EDE7D6";
-  wrapCanvasText(ctx, "Studying psychology for NET / SET / JRF — join me on Psych Catalog!", 80, 850, 900, 44);
+  wrapCanvasText(ctx, "Studying psychology for NET / SET / JRF — join me on Psych Catalog! https://course-kappa-two.vercel.app/", 80, 850, 900, 44);
 
   ctx.font = "600 24px Arial, sans-serif";
   ctx.fillStyle = "#C9A227";
