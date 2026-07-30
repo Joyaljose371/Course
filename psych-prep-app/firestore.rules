@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function getAdminData() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/admins/$(request.auth.uid)).data
+        : null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        getAdminData().role == 'super_admin';
+    }
+
+    function canManageSection(sectionName) {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && (
+        isSuperAdmin() ||
+        getAdminData().permissions[sectionName] == true ||
+        (sectionName == 'canImportExport' && getAdminData().permissions.canImportExport == true) ||
+        (sectionName == 'canManageAdmins' && getAdminData().permissions.canManageAdmins == true)
+      );
+    }
+
+    // Each user can only read/write their own profile document.
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Admin status is never writable from the client. Promote a user to admin
+    // by creating a document here manually in the Firebase Console, with the
+    // document ID set to that user's UID (found under Authentication).
+    match /admins/{uid} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == uid || isSuperAdmin() || isAdmin()
+      );
+      allow write: if isSignedIn() && (
+        request.auth.uid == uid || isSuperAdmin() || (
+          isAdmin() && request.resource.data.permissions.canManageAdmins == true &&
+          resource == null
+        )
+      );
+    }
+
+    // Shared content: any signed-in user can read; only admins can write.
+    match /categories/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('categories');
+    }
+    match /topics/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('topics');
+    }
+    match /persons/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('persons');
+    }
+    match /quizQuestions/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('quiz');
+    }
+    match /flashcards/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('flashcards');
+    }
+    match /researchSections/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('research');
+    }
+    match /dailyPosts/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('dailyPosts');
+    }
+    match /caseStudies/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('caseStudies');
+    }
+    match /journals/{id} {
+      allow read: if isSignedIn();
+      allow write: if canManageSection('journals');
+    }
+  }
+}
