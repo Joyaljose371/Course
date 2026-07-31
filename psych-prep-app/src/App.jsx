@@ -5,7 +5,7 @@ import {
   Search, RotateCcw, Award, BarChart2, GraduationCap, Home,
   CheckCircle2, XCircle, Sparkles, Shield, Plus, Trash2, Pencil, Lock,
   LogOut, Save, User, Mail, UploadCloud, Download, Upload, Flame, Zap, Share2,
-  ExternalLink, Globe,
+  ExternalLink, Globe, PlayCircle, FileText, Gauge,
 } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import { useProfile, useIsAdmin, useAdminDirectory, DEFAULT_ADMIN_PERMISSIONS, getLevelInfo } from "./hooks/useProfile";
@@ -540,6 +540,123 @@ function DailyPsychologyCard({ post, profile, completeDailyPost, toggleSaveDaily
 }
 
 /* ============================== BROWSE ============================== */
+/* ============================== VIDEO PLAYER ============================== */
+function getYouTubeEmbedUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "");
+    let videoId = null;
+    if (host === "youtu.be") {
+      videoId = u.pathname.slice(1);
+    } else if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      if (u.pathname === "/watch") videoId = u.searchParams.get("v");
+      else if (u.pathname.startsWith("/embed/")) videoId = u.pathname.split("/embed/")[1];
+      else if (u.pathname.startsWith("/shorts/")) videoId = u.pathname.split("/shorts/")[1];
+    }
+    videoId = videoId ? videoId.split("?")[0].split("&")[0] : null;
+    return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Accepts the common Google Drive share-link formats and converts them to
+// Drive's embeddable preview URL. Works for videos uploaded/shared on Drive.
+//   https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+//   https://drive.google.com/file/d/FILE_ID/preview
+//   https://drive.google.com/open?id=FILE_ID
+//   https://drive.google.com/uc?id=FILE_ID&export=download
+function getGoogleDriveEmbedUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "");
+    if (host !== "drive.google.com") return null;
+    let fileId = null;
+    const fileMatch = u.pathname.match(/\/file\/d\/([^/]+)/);
+    if (fileMatch) fileId = fileMatch[1];
+    else if (u.searchParams.get("id")) fileId = u.searchParams.get("id");
+    return fileId ? `https://drive.google.com/file/d/${fileId}/preview` : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+
+function VideoPlayer({ url }) {
+  const videoRef = React.useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const youTubeEmbedUrl = getYouTubeEmbedUrl(url);
+  const driveEmbedUrl = !youTubeEmbedUrl ? getGoogleDriveEmbedUrl(url) : null;
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+  }, [speed]);
+
+  if (!url) return null;
+
+  if (youTubeEmbedUrl) {
+    // YouTube's own embedded player already includes play/pause, seek,
+    // volume, fullscreen, and a playback-speed option (gear icon).
+    return (
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 8, overflow: "hidden", background: "#000" }}>
+          <iframe
+            src={youTubeEmbedUrl}
+            title="Topic video"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (driveEmbedUrl) {
+    // Google Drive's preview player includes its own play/pause, seek,
+    // volume, and fullscreen controls. Drive does not expose a playback-rate
+    // API through this embed, so a speed selector can't be layered on top —
+    // for guaranteed speed control, use a YouTube link or a direct video file instead.
+    return (
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 8, overflow: "hidden", background: "#000" }}>
+          <iframe
+            src={driveEmbedUrl}
+            title="Topic video"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+          />
+        </div>
+        <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: T.textMuted, marginTop: 6 }}>
+          Playing from Google Drive. Speed control isn't available for Drive-hosted video — use a YouTube link or a direct video file (.mp4/.webm) if speed control matters for this topic.
+        </div>
+      </div>
+    );
+  }
+
+  // Direct video source (.mp4/.webm link etc.) — native controls
+  // plus an explicit speed selector, since browser-native speed controls vary.
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <video ref={videoRef} src={url} controls style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <Gauge size={14} color={T.textMuted} />
+        <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: T.textMuted, marginRight: 4 }}>Speed:</span>
+        {PLAYBACK_SPEEDS.map((s) => (
+          <button key={s} onClick={() => setSpeed(s)} className="psy-focus" style={{ padding: "3px 9px", borderRadius: 12, border: `1px solid ${speed === s ? T.brass : T.bgPanelLight}`, background: speed === s ? `${T.brass}22` : "transparent", color: speed === s ? T.brassLight : T.textMuted, fontFamily: FONT_MONO, fontSize: 11.5, cursor: "pointer" }}>
+            {s}×
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilterCat }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
@@ -562,7 +679,7 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
       </div>
       {selected ? (
-        <TopicDetail topic={selected} cat={catOf(selected.categoryId)} onBack={() => setSelected(null)} profile={profile} toggleBookmark={toggleBookmark} />
+        <TopicDetail topic={selected} cat={catOf(selected.categoryId)} onBack={() => setSelected(null)} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} />
       ) : filtered.length === 0 ? <EmptyState text="No topics match this search. Try a different keyword or category." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {filtered.map((topic) => {
@@ -570,7 +687,7 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
             const isRead = profile.readTopics.includes(topic.id);
             const isBookmarked = profile.bookmarks.includes(topic.id);
             return (
-              <IndexCard key={topic.id} tint={cat.tint} onClick={() => { setSelected(topic); markRead(topic.id); }}>
+              <IndexCard key={topic.id} tint={cat.tint} onClick={() => setSelected(topic)}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
                   <button onClick={(e) => { e.stopPropagation(); toggleBookmark(topic.id); }} className="psy-focus" style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: isBookmarked ? T.brass : T.inkSoft }} aria-label="bookmark">
@@ -589,12 +706,15 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
   );
 }
 
-function TopicDetail({ topic, cat, onBack, profile, toggleBookmark }) {
+function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead }) {
   const isBookmarked = profile.bookmarks.includes(topic.id);
+  const isMastered = profile.readTopics.includes(topic.id);
+  const resourceLinks = Array.isArray(topic.resourceLinks) ? topic.resourceLinks : [];
+
   return (
     <div>
       <button onClick={onBack} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: T.brassLight, fontFamily: FONT_BODY, fontSize: 13, cursor: "pointer", marginBottom: 16, padding: 0 }}><ChevronLeft size={15} /> Back to drawer</button>
-      <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 24px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)" }}>
+      <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 24px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)", maxWidth: 720 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
           <button onClick={() => toggleBookmark(topic.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${T.ink}33`, borderRadius: 16, padding: "5px 11px", cursor: "pointer", color: isBookmarked ? T.rust : T.ink, fontFamily: FONT_BODY, fontSize: 12 }}>
@@ -602,10 +722,46 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark }) {
           </button>
         </div>
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, margin: "14px 0 4px" }}>{topic.name}</h2>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.inkSoft, marginBottom: 16 }}>landmark year — {topic.year}</div>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.inkSoft, marginBottom: 18 }}>landmark year — {topic.year}</div>
+
+        {topic.videoUrl && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>
+              <PlayCircle size={13} /> Video
+            </div>
+            <VideoPlayer url={topic.videoUrl} />
+          </>
+        )}
+
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>Description</div>
         <p style={{ fontFamily: FONT_BODY, fontSize: 14.5, lineHeight: 1.7, margin: "0 0 18px" }}>{topic.summary}</p>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>Key points</div>
-        <ul style={{ margin: 0, paddingLeft: 20, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.9 }}>{topic.keyPoints.map((kp, i) => <li key={i}>{kp}</li>)}</ul>
+        <ul style={{ margin: "0 0 22px", paddingLeft: 20, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.9 }}>{topic.keyPoints.map((kp, i) => <li key={i}>{kp}</li>)}</ul>
+
+        {resourceLinks.length > 0 && (
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 10 }}>
+              <FileText size={13} /> Resources
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {resourceLinks.map((r, i) => (
+                <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, textDecoration: "none", background: `${T.ink}0D`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "10px 14px", color: T.ink, fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 600 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}><FileText size={14} color={cat.tint} /> {r.label || r.url}</span>
+                  <ExternalLink size={13} color={T.inkSoft} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ borderTop: `1px solid ${T.ink}22`, paddingTop: 18 }}>
+          {isMastered ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: `${T.sage}22`, border: `1px solid ${T.sage}`, color: "#3D6B5C", borderRadius: 20, padding: "9px 18px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13.5 }}>
+              <CheckCircle2 size={16} /> Mastered
+            </div>
+          ) : (
+            <PrimaryButton onClick={() => markRead(topic.id)}><CheckCircle2 size={15} /> Mark as Mastered</PrimaryButton>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1601,13 +1757,30 @@ function AdminCategories({ dbData, addItem, deleteCategory }) {
 }
 
 function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
-  const blank = { categoryId: dbData.categories[0]?.id || "", name: "", year: "", summary: "", keyPoints: "" };
+  const blank = { categoryId: dbData.categories[0]?.id || "", name: "", year: "", summary: "", keyPoints: "", videoUrl: "", resourceLinks: "" };
   const { form, setForm, editingId, setEditingId, reset } = useEditableForm(blank);
-  const startEdit = (t) => { setForm({ categoryId: t.categoryId, name: t.name, year: t.year, summary: t.summary, keyPoints: t.keyPoints.join("\n") }); setEditingId(t.id); };
+  const startEdit = (t) => {
+    setForm({
+      categoryId: t.categoryId, name: t.name, year: t.year, summary: t.summary, keyPoints: t.keyPoints.join("\n"),
+      videoUrl: t.videoUrl || "",
+      resourceLinks: (t.resourceLinks || []).map((r) => `${r.label || ""} | ${r.url}`).join("\n"),
+    });
+    setEditingId(t.id);
+  };
   const submit = (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.categoryId) return;
-    const payload = { categoryId: form.categoryId, name: form.name.trim(), year: form.year.trim(), summary: form.summary.trim(), keyPoints: form.keyPoints.split("\n").map((s) => s.trim()).filter(Boolean) };
+    const resourceLinks = form.resourceLinks.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+      const [label, ...urlParts] = line.split("|");
+      const url = urlParts.join("|").trim();
+      return url ? { label: label.trim(), url } : { label: "", url: label.trim() };
+    }).filter((r) => r.url);
+    const payload = {
+      categoryId: form.categoryId, name: form.name.trim(), year: form.year.trim(), summary: form.summary.trim(),
+      keyPoints: form.keyPoints.split("\n").map((s) => s.trim()).filter(Boolean),
+      videoUrl: form.videoUrl.trim(),
+      resourceLinks,
+    };
     if (editingId) updateItem("topics", editingId, payload); else addItem("topics", payload);
     reset();
   };
@@ -1617,8 +1790,10 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
         <Field label="Category"><Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>{dbData.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
         <Field label="Topic name"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Emotion Regulation" /></Field>
         <Field label="Landmark year"><TextInput value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} placeholder="e.g. 1998" /></Field>
-        <Field label="Summary"><TextArea value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="2-3 sentence overview" /></Field>
+        <Field label="Video URL (optional — YouTube, Google Drive share link, or direct .mp4/.webm)"><TextInput value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/file/d/.../view" /></Field>
+        <Field label="Description / Summary"><TextArea value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="2-3 sentence overview" /></Field>
         <Field label="Key points (one per line)"><TextArea value={form.keyPoints} onChange={(e) => setForm({ ...form, keyPoints: e.target.value })} placeholder={"Point one\nPoint two"} /></Field>
+        <Field label="Resource links (optional — one per line, format: Label | URL)"><TextArea value={form.resourceLinks} onChange={(e) => setForm({ ...form, resourceLinks: e.target.value })} placeholder={"Lecture slides | https://...\nOriginal paper | https://..."} /></Field>
         <div style={{ display: "flex", gap: 8 }}><PrimaryButton type="submit">{editingId ? <><Save size={14} /> Save</> : <><Plus size={14} /> Add topic</>}</PrimaryButton>{editingId && <GhostButton onClick={reset}>Cancel</GhostButton>}</div>
       </form>
     } list={dbData.topics.map((t) => {
@@ -1626,7 +1801,7 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
       return (
         <div key={t.id} style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 8, padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-            <div><CatalogStamp tint={cat?.tint}>{cat?.name || "—"}</CatalogStamp><div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight, marginTop: 6 }}>{t.name}</div><div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.textMuted, marginTop: 2 }}>{t.year}</div></div>
+            <div><CatalogStamp tint={cat?.tint}>{cat?.name || "—"}</CatalogStamp><div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight, marginTop: 6 }}>{t.name}</div><div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.textMuted, marginTop: 2 }}>{t.year}{t.videoUrl ? " · has video" : ""}</div></div>
             <div style={{ display: "flex", gap: 6 }}><GhostButton onClick={() => startEdit(t)}><Pencil size={13} /> Edit</GhostButton><GhostButton danger onClick={() => { if (confirm(`Delete topic "${t.name}"?`)) deleteItem("topics", t.id); }}><Trash2 size={13} /></GhostButton></div>
           </div>
         </div>
