@@ -541,6 +541,50 @@ function DailyPsychologyCard({ post, profile, completeDailyPost, toggleSaveDaily
 
 /* ============================== BROWSE ============================== */
 /* ============================== VIDEO PLAYER ============================== */
+/* ============================== MOBILE BACK-BUTTON NAVIGATION ============================== */
+// Ties a "detail view" (topic detail, case study detail, etc.) into the
+// device/browser back button, so pressing back closes the detail view and
+// returns to its list instead of exiting the app. Works for the Android
+// hardware/gesture back button in a PWA, and the browser back button on web.
+//
+// Usage: call with (isOpen, onClose) where isOpen is whether the detail view
+// is currently showing, and onClose is the function that closes it. Also use
+// the returned `goBack` function as the onClick for any in-app "Back" button,
+// instead of calling onClose directly — this keeps the two paths in sync.
+function useBackableView(isOpen, onClose) {
+  const pushedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (isOpen && !pushedRef.current) {
+      window.history.pushState({ __detailView: true }, "");
+      pushedRef.current = true;
+    }
+    if (!isOpen) {
+      pushedRef.current = false;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (pushedRef.current) {
+        pushedRef.current = false;
+        onClose();
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose]);
+
+  const goBack = useCallback(() => {
+    if (pushedRef.current) window.history.back();
+    else onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose]);
+
+  return goBack;
+}
+
 function getYouTubeEmbedUrl(url) {
   if (!url) return null;
   try {
@@ -585,7 +629,7 @@ function getGoogleDriveEmbedUrl(url) {
 
 const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
-function VideoPlayer({ url }) {
+function VideoPlayer({ url, isAdmin }) {
   const videoRef = React.useRef(null);
   const [speed, setSpeed] = useState(1);
   const youTubeEmbedUrl = getYouTubeEmbedUrl(url);
@@ -616,24 +660,26 @@ function VideoPlayer({ url }) {
   }
 
   if (driveEmbedUrl) {
-    // Google Drive's preview player includes its own play/pause, seek,
-    // volume, and fullscreen controls. Drive does not expose a playback-rate
-    // API through this embed, so a speed selector can't be layered on top —
-    // for guaranteed speed control, use a YouTube link or a direct video file instead.
+    // Google Drive's preview UI has its own toolbar above the video, so
+    // forcing it into a strict 16:9 box (like YouTube) squeezes/distorts it,
+    // especially on narrow phone screens. Giving it a taller box with a
+    // sensible floor height fixes that without affecting the YouTube path.
     return (
       <div style={{ marginBottom: 22 }}>
-        <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 8, overflow: "hidden", background: "#000" }}>
+        <div style={{ width: "100%", aspectRatio: "4 / 3", minHeight: 320, borderRadius: 8, overflow: "hidden", background: "#000" }}>
           <iframe
             src={driveEmbedUrl}
             title="Topic video"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+            style={{ width: "100%", height: "100%", border: "none", display: "block" }}
             allow="autoplay; encrypted-media"
             allowFullScreen
           />
         </div>
-        <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: T.textMuted, marginTop: 6 }}>
-          Playing from Google Drive. Speed control isn't available for Drive-hosted video — use a YouTube link or a direct video file (.mp4/.webm) if speed control matters for this topic.
-        </div>
+        {isAdmin && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: T.textMuted, marginTop: 6 }}>
+            Playing from Google Drive. Speed control isn't available for Drive-hosted video — use a YouTube link or a direct video file (.mp4/.webm) if speed control matters for this topic.
+          </div>
+        )}
       </div>
     );
   }
@@ -657,9 +703,11 @@ function VideoPlayer({ url }) {
 }
 
 
-function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilterCat }) {
+function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilterCat, isAdmin }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
+  const closeSelected = useCallback(() => setSelected(null), []);
+  const goBackFromTopic = useBackableView(!!selected, closeSelected);
   const filtered = useMemo(() => dbData.topics.filter((t) => {
     const matchesCat = filterCat === "all" || t.categoryId === filterCat;
     const matchesQuery = query.trim() === "" || t.name.toLowerCase().includes(query.toLowerCase());
@@ -679,7 +727,7 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
       </div>
       {selected ? (
-        <TopicDetail topic={selected} cat={catOf(selected.categoryId)} onBack={() => setSelected(null)} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} />
+        <TopicDetail topic={selected} cat={catOf(selected.categoryId)} onBack={goBackFromTopic} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} isAdmin={isAdmin} />
       ) : filtered.length === 0 ? <EmptyState text="No topics match this search. Try a different keyword or category." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {filtered.map((topic) => {
@@ -706,7 +754,7 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
   );
 }
 
-function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead }) {
+function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, isAdmin }) {
   const isBookmarked = profile.bookmarks.includes(topic.id);
   const isMastered = profile.readTopics.includes(topic.id);
   const resourceLinks = Array.isArray(topic.resourceLinks) ? topic.resourceLinks : [];
@@ -729,7 +777,7 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead }) 
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>
               <PlayCircle size={13} /> Video
             </div>
-            <VideoPlayer url={topic.videoUrl} />
+            <VideoPlayer url={topic.videoUrl} isAdmin={isAdmin} />
           </>
         )}
 
@@ -987,12 +1035,14 @@ function Quiz({ dbData, addQuizResult }) {
 function CaseStudies({ dbData, completeCaseStudy, profile }) {
   const [filterCat, setFilterCat] = useState("all");
   const [selected, setSelected] = useState(null);
+  const closeSelected = useCallback(() => setSelected(null), []);
+  const goBackFromCase = useBackableView(!!selected, closeSelected);
 
   const list = dbData.caseStudies.filter((c) => filterCat === "all" || c.categoryId === filterCat);
   const catOf = (id) => dbData.categories.find((c) => c.id === id) || { name: id, tint: T.brass };
 
   if (selected) {
-    return <CaseStudyDetail caseStudy={selected} cat={catOf(selected.categoryId)} onBack={() => setSelected(null)} completeCaseStudy={completeCaseStudy} />;
+    return <CaseStudyDetail caseStudy={selected} cat={catOf(selected.categoryId)} onBack={goBackFromCase} completeCaseStudy={completeCaseStudy} />;
   }
 
   return (
@@ -2037,7 +2087,7 @@ export default function App() {
         ) : (
           <>
             {active === "dashboard" && <Dashboard profile={profile} dbData={dbData} setActive={setActive} setBrowseFilter={setBrowseFilter} completeDailyPost={completeDailyPost} toggleSaveDaily={toggleSaveDaily} />}
-            {active === "browse" && <Browse dbData={dbData} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} filterCat={browseFilter} setFilterCat={setBrowseFilter} />}
+            {active === "browse" && <Browse dbData={dbData} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} filterCat={browseFilter} setFilterCat={setBrowseFilter} isAdmin={isAdmin} />}
             {active === "theories" && <Theories dbData={dbData} />}
             {active === "research" && <ResearchMethodology dbData={dbData} />}
             {active === "quiz" && <Quiz dbData={dbData} addQuizResult={addQuizResult} />}
