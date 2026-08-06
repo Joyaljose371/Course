@@ -30,7 +30,8 @@ const FontLoader = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
     * { box-sizing: border-box; }
-    body { margin: 0; }
+    html, body { margin: 0; max-width: 100%; overflow-x: hidden; }
+    #root { max-width: 100%; overflow-x: hidden; }
     .psy-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
     .psy-scroll::-webkit-scrollbar-thumb { background: ${T.brass}55; border-radius: 4px; }
     .psy-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -39,6 +40,13 @@ const FontLoader = () => (
     .card-face { backface-visibility: hidden; overflow: hidden; }
     .card-back { transform: rotateY(180deg); }
     .psy-focus:focus-visible { outline: 2px solid ${T.brass}; outline-offset: 2px; }
+    .psy-admin-grid { min-width: 0; }
+    .psy-card-grid { min-width: 0; }
+    .psy-card-grid > * { min-width: 0; }
+    .psy-mono-wrap, .psy-mono-wrap * { overflow-wrap: anywhere; word-break: break-word; }
+    @media (max-width: 720px) {
+      .psy-admin-grid { grid-template-columns: 1fr !important; }
+    }
     @media (prefers-reduced-motion: reduce) { .card-flip-inner { transition: none !important; } }
   `}</style>
 );
@@ -156,17 +164,29 @@ function friendlyAuthError(e) {
 }
 
 /* ============================== NAV ============================== */
+const NAV_LABELS = {
+  dashboard: "Dashboard",
+  browse: "Browse",
+  theories: "Theories & Persons",
+  research: "Research Methodology",
+  quiz: "Quiz",
+  caseStudies: "Case Studies",
+  explore: "Explore",
+  flashcards: "Flashcards",
+  admin: "Admin",
+};
+
 function Nav({ active, setActive, isAdmin }) {
   const items = [
-    { id: "dashboard", label: "Dashboard", icon: Home },
-    { id: "browse", label: "Browse", icon: Layers },
-    { id: "theories", label: "Theories & Persons", icon: GraduationCap },
-    { id: "research", label: "Research Methodology", icon: FlaskConical },
-    { id: "quiz", label: "Quiz", icon: ClipboardList },
-    { id: "caseStudies", label: "Case Studies", icon: Brain },
-    { id: "explore", label: "Explore", icon: Globe },
-    { id: "flashcards", label: "Flashcards", icon: BookOpen },
-    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: Shield }] : []),
+    { id: "dashboard", label: NAV_LABELS.dashboard, icon: Home },
+    { id: "browse", label: NAV_LABELS.browse, icon: Layers },
+    { id: "theories", label: NAV_LABELS.theories, icon: GraduationCap },
+    { id: "research", label: NAV_LABELS.research, icon: FlaskConical },
+    { id: "quiz", label: NAV_LABELS.quiz, icon: ClipboardList },
+    { id: "caseStudies", label: NAV_LABELS.caseStudies, icon: Brain },
+    { id: "explore", label: NAV_LABELS.explore, icon: Globe },
+    { id: "flashcards", label: NAV_LABELS.flashcards, icon: BookOpen },
+    ...(isAdmin ? [{ id: "admin", label: NAV_LABELS.admin, icon: Shield }] : []),
   ];
   return (
     <nav style={{ display: "flex", gap: 4, overflowX: "auto", padding: "10px 20px", background: T.bgPanel, borderBottom: `1px solid ${T.bgPanelLight}` }} className="psy-scroll">
@@ -539,9 +559,50 @@ function DailyPsychologyCard({ post, profile, completeDailyPost, toggleSaveDaily
   );
 }
 
-/* ============================== BROWSE ============================== */
-/* ============================== VIDEO PLAYER ============================== */
-/* ============================== MOBILE BACK-BUTTON NAVIGATION ============================== */
+/* ============================== SHAREABLE LINKS ============================== */
+function buildAppUrl(params) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v) sp.set(k, v); });
+  const qs = sp.toString();
+  return url.origin + url.pathname + (qs ? `?${qs}` : "");
+}
+
+function ShareLinkButton({ url, title, text, label = "Share link", style }) {
+  const [status, setStatus] = useState("idle"); // idle | copied | error
+
+  const share = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ url, title, text });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setStatus("copied");
+      setTimeout(() => setStatus("idle"), 2000);
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(url);
+        setStatus("copied");
+        setTimeout(() => setStatus("idle"), 2000);
+      } catch (e2) {
+        setStatus("error");
+        setTimeout(() => setStatus("idle"), 2000);
+      }
+    }
+  };
+
+  return (
+    <GhostButton onClick={share} style={style}>
+      <Share2 size={13} /> {status === "copied" ? "Link copied!" : status === "error" ? "Couldn't copy" : label}
+    </GhostButton>
+  );
+}
+
+
 // Ties a "detail view" (topic detail, case study detail, etc.) into the
 // device/browser back button, so pressing back closes the detail view and
 // returns to its list instead of exiting the app. Works for the Android
@@ -551,17 +612,18 @@ function DailyPsychologyCard({ post, profile, completeDailyPost, toggleSaveDaily
 // is currently showing, and onClose is the function that closes it. Also use
 // the returned `goBack` function as the onClick for any in-app "Back" button,
 // instead of calling onClose directly — this keeps the two paths in sync.
-function useBackableView(isOpen, onClose) {
+function useBackableView(isOpen, onClose, url) {
   const pushedRef = React.useRef(false);
 
   useEffect(() => {
     if (isOpen && !pushedRef.current) {
-      window.history.pushState({ __detailView: true }, "");
+      window.history.pushState({ __detailView: true }, "", url);
       pushedRef.current = true;
     }
     if (!isOpen) {
       pushedRef.current = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -660,16 +722,20 @@ function VideoPlayer({ url, isAdmin }) {
   }
 
   if (driveEmbedUrl) {
-    // Google Drive's preview UI has its own toolbar above the video, so
-    // forcing it into a strict 16:9 box (like YouTube) squeezes/distorts it,
-    // especially on narrow phone screens. Giving it a taller box with a
-    // sensible floor height fixes that without affecting the YouTube path.
+    // Google Drive's internal player positions its own control bar based on
+    // the iframe's rendered dimensions at load time. A CSS `aspect-ratio` box
+    // resolves its height asynchronously (after the width is known), which
+    // was making Drive's controls render mid-video instead of at the bottom
+    // during playback. A plain fixed pixel height (matching Google's own
+    // recommended embed dimensions) avoids that timing issue entirely.
     return (
       <div style={{ marginBottom: 22 }}>
-        <div style={{ width: "100%", aspectRatio: "4 / 3", minHeight: 320, borderRadius: 8, overflow: "hidden", background: "#000" }}>
+        <div style={{ width: "100%", height: 340, borderRadius: 8, overflow: "hidden", background: "#000" }}>
           <iframe
             src={driveEmbedUrl}
             title="Topic video"
+            width="100%"
+            height="340"
             style={{ width: "100%", height: "100%", border: "none", display: "block" }}
             allow="autoplay; encrypted-media"
             allowFullScreen
@@ -703,11 +769,20 @@ function VideoPlayer({ url, isAdmin }) {
 }
 
 
-function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilterCat, isAdmin }) {
+function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilterCat, isAdmin, deepLinkTopicId }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
   const closeSelected = useCallback(() => setSelected(null), []);
-  const goBackFromTopic = useBackableView(!!selected, closeSelected);
+  const goBackFromTopic = useBackableView(!!selected, closeSelected, selected ? buildAppUrl({ page: "browse", topic: selected.id }) : null);
+  const appliedDeepLink = React.useRef(false);
+
+  useEffect(() => {
+    if (appliedDeepLink.current || !deepLinkTopicId || dbData.topics.length === 0) return;
+    const match = dbData.topics.find((t) => t.id === deepLinkTopicId);
+    if (match) setSelected(match);
+    appliedDeepLink.current = true;
+  }, [deepLinkTopicId, dbData.topics]);
+
   const filtered = useMemo(() => dbData.topics.filter((t) => {
     const matchesCat = filterCat === "all" || t.categoryId === filterCat;
     const matchesQuery = query.trim() === "" || t.name.toLowerCase().includes(query.toLowerCase());
@@ -765,9 +840,17 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, is
       <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 24px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)", maxWidth: 720 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
-          <button onClick={() => toggleBookmark(topic.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${T.ink}33`, borderRadius: 16, padding: "5px 11px", cursor: "pointer", color: isBookmarked ? T.rust : T.ink, fontFamily: FONT_BODY, fontSize: 12 }}>
-            {isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />} {isBookmarked ? "Bookmarked" : "Bookmark"}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <ShareLinkButton
+              url={buildAppUrl({ page: "browse", topic: topic.id })}
+              title={topic.name}
+              text={`${topic.name} — Psych Catalog`}
+              style={{ border: `1px solid ${T.ink}33`, color: T.ink }}
+            />
+            <button onClick={() => toggleBookmark(topic.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${T.ink}33`, borderRadius: 16, padding: "5px 11px", cursor: "pointer", color: isBookmarked ? T.rust : T.ink, fontFamily: FONT_BODY, fontSize: 12 }}>
+              {isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />} {isBookmarked ? "Bookmarked" : "Bookmark"}
+            </button>
+          </div>
         </div>
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, margin: "14px 0 4px" }}>{topic.name}</h2>
         <div style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.inkSoft, marginBottom: 18 }}>landmark year — {topic.year}</div>
@@ -1032,11 +1115,19 @@ function Quiz({ dbData, addQuizResult }) {
 }
 
 /* ============================== CASE STUDIES ============================== */
-function CaseStudies({ dbData, completeCaseStudy, profile }) {
+function CaseStudies({ dbData, completeCaseStudy, profile, deepLinkCaseId }) {
   const [filterCat, setFilterCat] = useState("all");
   const [selected, setSelected] = useState(null);
   const closeSelected = useCallback(() => setSelected(null), []);
-  const goBackFromCase = useBackableView(!!selected, closeSelected);
+  const goBackFromCase = useBackableView(!!selected, closeSelected, selected ? buildAppUrl({ page: "caseStudies", case: selected.id }) : null);
+  const appliedDeepLink = React.useRef(false);
+
+  useEffect(() => {
+    if (appliedDeepLink.current || !deepLinkCaseId || dbData.caseStudies.length === 0) return;
+    const match = dbData.caseStudies.find((c) => c.id === deepLinkCaseId);
+    if (match) setSelected(match);
+    appliedDeepLink.current = true;
+  }, [deepLinkCaseId, dbData.caseStudies]);
 
   const list = dbData.caseStudies.filter((c) => filterCat === "all" || c.categoryId === filterCat);
   const catOf = (id) => dbData.categories.find((c) => c.id === id) || { name: id, tint: T.brass };
@@ -1129,7 +1220,15 @@ function CaseStudyDetail({ caseStudy, cat, onBack, completeCaseStudy }) {
     <div>
       <button onClick={onBack} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: T.brassLight, fontFamily: FONT_BODY, fontSize: 13, cursor: "pointer", marginBottom: 16, padding: 0 }}><ChevronLeft size={15} /> Back to case studies</button>
       <div style={{ background: T.paper, borderRadius: 10, padding: "24px 26px", color: T.ink, maxWidth: 600, boxShadow: "0 8px 20px rgba(0,0,0,0.25)" }}>
-        <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+          <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
+          <ShareLinkButton
+            url={buildAppUrl({ page: "caseStudies", case: caseStudy.id })}
+            title={caseStudy.title}
+            text={`${caseStudy.title} — a case study on Psych Catalog`}
+            style={{ border: `1px solid ${T.ink}33`, color: T.ink }}
+          />
+        </div>
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, margin: "12px 0 14px" }}>{caseStudy.title}</h2>
         <div style={{ background: `${T.ink}0D`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "12px 14px", marginBottom: 18, fontFamily: FONT_BODY, fontSize: 13.5, lineHeight: 1.65, fontStyle: "italic" }}>{caseStudy.scenario}</div>
 
@@ -1216,19 +1315,19 @@ function Explore({ dbData }) {
       </div>
 
       {list.length === 0 ? <EmptyState text="Nothing matches this search yet." /> : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+        <div className="psy-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
           {list.map((j) => {
             const cat = catOf(j.categoryId);
             return (
-              <a key={j.id} href={j.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+              <a key={j.id} href={j.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", display: "block", minWidth: 0 }}>
                 <IndexCard tint={cat.tint} onClick={() => {}}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
                     {j.recent && <CatalogStamp tint={T.rust}>New</CatalogStamp>}
                   </div>
                   <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, marginTop: 10, lineHeight: 1.3 }}>{j.title}</div>
-                  <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.inkSoft, marginTop: 4 }}>{j.source} · {j.type}</div>
-                  <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.5 }}>{j.description}</div>
+                  <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.inkSoft, marginTop: 4, overflowWrap: "anywhere" }}>{j.source} · {j.type}</div>
+                  <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft, marginTop: 8, lineHeight: 1.5, overflowWrap: "anywhere" }}>{j.description}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, fontFamily: FONT_BODY, fontSize: 12, fontWeight: 700, color: cat.tint }}>
                     Open <ExternalLink size={13} />
                   </div>
@@ -1682,7 +1781,7 @@ function AdminJournals({ dbData, addItem, updateItem, deleteItem }) {
             <div>
               <CatalogStamp tint={cat?.tint}>{cat?.name || "General"}</CatalogStamp>
               <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight, marginTop: 6 }}>{j.title}</div>
-              <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.textMuted, marginTop: 2 }}>{j.type} · {j.url}</div>
+              <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.textMuted, marginTop: 2, overflowWrap: "anywhere" }}>{j.type} · {j.url}</div>
             </div>
             <div style={{ display: "flex", gap: 6 }}><GhostButton onClick={() => startEdit(j)}><Pencil size={13} /> Edit</GhostButton><GhostButton danger onClick={() => { if (confirm(`Delete "${j.title}"?`)) deleteItem("journals", j.id); }}><Trash2 size={13} /></GhostButton></div>
           </div>
@@ -1764,12 +1863,12 @@ function AdminImportExport({ dbData, exportContent, importContent }) {
 
 function AdminShell({ formTitle, form, list }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 340px) 1fr", gap: 20, alignItems: "start" }}>
-      <div style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 10, padding: 18 }}>
+    <div className="psy-admin-grid" style={{ display: "grid", gridTemplateColumns: "minmax(260px, 340px) 1fr", gap: 20, alignItems: "start" }}>
+      <div style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 10, padding: 18, minWidth: 0 }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, color: T.textLight, marginBottom: 14 }}>{formTitle}</div>
         {form}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{list}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>{list}</div>
     </div>
   );
 }
@@ -2022,11 +2121,22 @@ export default function App() {
   const { admins, loaded: adminDirectoryLoaded, saveAdmin, removeAdmin } = useAdminDirectory();
   const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent } = useContentDB();
 
-  const [active, setActive] = useState("dashboard");
+  const [active, setActive] = useState(() => new URLSearchParams(window.location.search).get("page") || "dashboard");
+  const [deepLinkTopicId] = useState(() => new URLSearchParams(window.location.search).get("topic"));
+  const [deepLinkCaseId] = useState(() => new URLSearchParams(window.location.search).get("case"));
   const [browseFilter, setBrowseFilter] = useState("all");
   const [showFocusEdit, setShowFocusEdit] = useState(false);
 
   const loaded = profileLoaded && adminLoaded && contentLoaded && adminDirectoryLoaded;
+
+  // Keep the URL's ?page= in sync with the active tab, so the current tab
+  // is always a shareable/bookmarkable/refreshable link. Uses replaceState
+  // (not pushState) so switching tabs doesn't add extra back-button stops —
+  // that's handled separately by useBackableView for topic/case detail views.
+  useEffect(() => {
+    if (!loaded) return;
+    window.history.replaceState(window.history.state, "", buildAppUrl({ page: active }));
+  }, [active, loaded]);
 
   useEffect(() => {
     if (loaded && profile.name) recordDailyVisit();
@@ -2067,6 +2177,12 @@ export default function App() {
                 {isAdmin ? <span>{profile.name} <span style={{ color: T.brassLight, fontFamily: FONT_MONO, fontSize: 10.5, marginLeft: 4 }}>{adminData?.role === "super_admin" ? "· SUPER ADMIN" : "· ADMIN"}</span></span> : <span>Scholar</span>}
               </div>
               <GhostButton onClick={() => setShowFocusEdit(true)}>Edit focus</GhostButton>
+              <ShareLinkButton
+                url={buildAppUrl({ page: active })}
+                title="Psych Catalog"
+                text={`Check out the ${NAV_LABELS[active] || active} section on Psych Catalog — NET/SET/JRF psychology prep.`}
+                label="Share page"
+              />
               <GhostButton onClick={logOut}><LogOut size={13} /> Log out</GhostButton>
             </div>
           )}
@@ -2087,11 +2203,11 @@ export default function App() {
         ) : (
           <>
             {active === "dashboard" && <Dashboard profile={profile} dbData={dbData} setActive={setActive} setBrowseFilter={setBrowseFilter} completeDailyPost={completeDailyPost} toggleSaveDaily={toggleSaveDaily} />}
-            {active === "browse" && <Browse dbData={dbData} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} filterCat={browseFilter} setFilterCat={setBrowseFilter} isAdmin={isAdmin} />}
+            {active === "browse" && <Browse dbData={dbData} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} filterCat={browseFilter} setFilterCat={setBrowseFilter} isAdmin={isAdmin} deepLinkTopicId={deepLinkTopicId} />}
             {active === "theories" && <Theories dbData={dbData} />}
             {active === "research" && <ResearchMethodology dbData={dbData} />}
             {active === "quiz" && <Quiz dbData={dbData} addQuizResult={addQuizResult} />}
-            {active === "caseStudies" && <CaseStudies dbData={dbData} completeCaseStudy={completeCaseStudy} profile={profile} />}
+            {active === "caseStudies" && <CaseStudies dbData={dbData} completeCaseStudy={completeCaseStudy} profile={profile} deepLinkCaseId={deepLinkCaseId} />}
             {active === "explore" && <Explore dbData={dbData} />}
             {active === "flashcards" && <Flashcards dbData={dbData} profile={profile} setFlashcardStatus={setFlashcardStatus} />}
             {active === "admin" && isAdmin && <AdminPanel dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} deleteCategory={deleteCategory} seedStarterContent={seedStarterContent} exportContent={exportContent} importContent={importContent} adminData={adminData} admins={admins} saveAdmin={saveAdmin} removeAdmin={removeAdmin} currentUid={user?.uid} />}
