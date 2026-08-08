@@ -13,10 +13,10 @@ import { useContentDB } from "./hooks/useContentDB";
 
 /* ============================== THEME ============================== */
 const T = {
-  bgDeep: "#1B2A41", bgPanel: "#223353", bgPanelLight: "#2C4468",
-  paper: "#F1E9D8", paperDark: "#E4D9BE", ink: "#1B2A41", inkSoft: "#3C4E6B",
-  brass: "#C9A227", brassLight: "#E3C25E", sage: "#7FA598", rust: "#B5533C",
-  textLight: "#EDE7D6", textMuted: "#93A6BE",
+  bgDeep: "#F3F1FC", bgPanel: "#FFFFFF", bgPanelLight: "#E3DEF9",
+  paper: "#FFFFFF", paperDark: "#EDEAFB", ink: "#241F45", inkSoft: "#6B6693",
+  brass: "#6C5CE7", brassLight: "#5A4FD6", sage: "#16A34A", rust: "#DC2626",
+  textLight: "#241F45", textMuted: "#716C99",
 };
 const FONT_DISPLAY = "'Lora', serif";
 const FONT_BODY = "'Inter', sans-serif";
@@ -56,7 +56,7 @@ const CatalogStamp = ({ children, tint }) => (
   <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, background: `${tint || T.brass}15`, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap" }}>{children}</span>
 );
 const PunchHole = () => (
-  <div style={{ position: "absolute", top: 10, left: 10, width: 10, height: 10, borderRadius: "50%", background: T.bgDeep, boxShadow: `inset 0 0 0 1px ${T.ink}22` }} />
+  <div style={{ position: "absolute", top: 10, left: 10, width: 10, height: 10, borderRadius: "50%", background: T.paperDark, boxShadow: `inset 0 0 0 1px ${T.ink}22` }} />
 );
 const IndexCard = ({ children, style, onClick, tint }) => (
   <div onClick={onClick} className="psy-focus" tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e) => { if (e.key === "Enter") onClick(); } : undefined}
@@ -84,7 +84,7 @@ const FilterChip = ({ label, active, onClick, tint }) => (
   <button onClick={onClick} className="psy-focus" style={{ fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 16, cursor: "pointer", border: `1px solid ${active ? (tint || T.brass) : T.bgPanelLight}`, background: active ? `${tint || T.brass}22` : "transparent", color: active ? (tint || T.brassLight) : T.textMuted }}>{label}</button>
 );
 const PrimaryButton = ({ children, onClick, type = "button", style, disabled }) => (
-  <button type={type} onClick={onClick} disabled={disabled} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: disabled ? `${T.ink}88` : T.ink, color: T.textLight, border: "none", borderRadius: 20, padding: "9px 16px", fontFamily: FONT_BODY, fontWeight: 600, fontSize: 13.5, cursor: disabled ? "not-allowed" : "pointer", ...style }}>{children}</button>
+  <button type={type} onClick={onClick} disabled={disabled} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: disabled ? `${T.brass}77` : T.brass, color: "#FFFFFF", border: "none", borderRadius: 20, padding: "9px 16px", fontFamily: FONT_BODY, fontWeight: 600, fontSize: 13.5, cursor: disabled ? "not-allowed" : "pointer", boxShadow: disabled ? "none" : "0 4px 12px rgba(108,92,231,0.35)", ...style }}>{children}</button>
 );
 const GhostButton = ({ children, onClick, danger, style, type = "button" }) => (
   <button type={type} onClick={onClick} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${danger ? T.rust : T.bgPanelLight}`, color: danger ? T.rust : T.textLight, borderRadius: 16, padding: "6px 11px", fontFamily: FONT_BODY, fontWeight: 600, fontSize: 12, cursor: "pointer", ...style }}>{children}</button>
@@ -194,7 +194,7 @@ function Nav({ active, setActive, isAdmin }) {
         const Icon = item.icon;
         const isActive = active === item.id;
         return (
-          <button key={item.id} onClick={() => setActive(item.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", color: isActive ? T.bgDeep : (item.id === "admin" ? T.brassLight : T.textLight), background: isActive ? T.brass : "transparent" }}>
+          <button key={item.id} onClick={() => setActive(item.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", color: isActive ? "#FFFFFF" : (item.id === "admin" ? T.brassLight : T.textLight), background: isActive ? T.brass : "transparent" }}>
             <Icon size={15} />{item.label}
           </button>
         );
@@ -209,7 +209,7 @@ function Onboarding({ categories, initialName, onComplete }) {
   const [focus, setFocus] = useState([]);
   const toggleFocus = (id) => setFocus((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
   return (
-    <div style={{ position: "fixed", inset: 0, background: `${T.bgDeep}EE`, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(30, 27, 61, 0.82)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: T.paper, borderRadius: 12, padding: 30, maxWidth: 460, width: "100%", color: T.ink, boxShadow: "0 20px 50px rgba(0,0,0,0.4)" }}>
         <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: T.brass }}>Welcome</div>
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: "6px 0 18px" }}>Set up your catalog card</h2>
@@ -258,54 +258,54 @@ function generateShareImageBlob(profile, level) {
   const ctx = canvas.getContext("2d");
 
   const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1080);
-  bgGrad.addColorStop(0, "#1B2A41");
-  bgGrad.addColorStop(1, "#2C4468");
+  bgGrad.addColorStop(0, T.bgDeep);
+  bgGrad.addColorStop(1, T.bgPanelLight);
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, 1080, 1080);
 
-  ctx.fillStyle = "rgba(201,162,39,0.10)";
+  ctx.fillStyle = "rgba(124,92,255,0.14)";
   ctx.beginPath(); ctx.arc(950, 130, 280, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "rgba(201,162,39,0.06)";
+  ctx.fillStyle = "rgba(124,92,255,0.08)";
   ctx.beginPath(); ctx.arc(80, 1000, 240, 0, Math.PI * 2); ctx.fill();
 
-  ctx.fillStyle = "#C9A227";
+  ctx.fillStyle = T.brassLight;
   ctx.font = "700 40px Georgia, 'Times New Roman', serif";
   ctx.fillText("PSYCH CATALOG", 80, 110);
 
-  ctx.fillStyle = "#93A6BE";
+  ctx.fillStyle = T.textMuted;
   ctx.font = "400 26px Arial, sans-serif";
   ctx.fillText("UGC NET · SET · JRF Psychology Prep", 80, 150);
 
   ctx.font = "700 200px Arial, sans-serif";
-  ctx.fillStyle = "#EDE7D6";
+  ctx.fillStyle = T.textLight;
   ctx.fillText("🔥", 70, 470);
 
   ctx.font = "700 170px Georgia, 'Times New Roman', serif";
-  ctx.fillStyle = "#EDE7D6";
+  ctx.fillStyle = T.textLight;
   ctx.fillText(`${profile.streak.current}`, 340, 440);
 
   ctx.font = "600 40px Arial, sans-serif";
-  ctx.fillStyle = "#C9A227";
+  ctx.fillStyle = T.brassLight;
   ctx.fillText("DAY STREAK", 344, 495);
 
-  ctx.strokeStyle = "rgba(147,166,190,0.35)";
+  ctx.strokeStyle = "rgba(167,159,209,0.35)";
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(80, 580); ctx.lineTo(1000, 580); ctx.stroke();
 
   ctx.font = "700 56px Arial, sans-serif";
-  ctx.fillStyle = "#EDE7D6";
+  ctx.fillStyle = T.textLight;
   ctx.fillText(`${profile.xp} XP`, 80, 670);
 
   ctx.font = "400 34px Arial, sans-serif";
-  ctx.fillStyle = "#93A6BE";
+  ctx.fillStyle = T.textMuted;
   ctx.fillText(level.name, 80, 715);
 
   ctx.font = "italic 32px Georgia, 'Times New Roman', serif";
-  ctx.fillStyle = "#EDE7D6";
+  ctx.fillStyle = T.textLight;
   wrapCanvasText(ctx, "Studying psychology for NET / SET / JRF — join me on Psych Catalog!", 80, 850, 900, 44);
 
   ctx.font = "600 24px Arial, sans-serif";
-  ctx.fillStyle = "#C9A227";
+  ctx.fillStyle = T.brassLight;
   ctx.fillText("psych-catalog.app", 80, 990);
 
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
@@ -389,7 +389,7 @@ function Dashboard({ profile, dbData, setActive, setBrowseFilter, completeDailyP
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: T.textLight }}><Zap size={14} color={T.brass} /> {level.name}</div>
             <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.textMuted }}>{profile.xp} XP</span>
           </div>
-          <div style={{ height: 6, borderRadius: 3, background: T.bgDeep, overflow: "hidden" }}>
+          <div style={{ height: 6, borderRadius: 3, background: T.bgPanelLight, overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${level.progressPct}%`, background: T.brass, borderRadius: 3 }} />
           </div>
           <div style={{ fontFamily: FONT_BODY, fontSize: 11, color: T.textMuted, marginTop: 6 }}>{level.next ? `${level.next.threshold - profile.xp} XP to ${level.next.name}` : "Max level reached"}</div>
@@ -971,7 +971,7 @@ function ResearchGettingStarted() {
             {i !== RESEARCH_ALGORITHM.length - 1 && (
               <div style={{ position: "absolute", left: 15, top: 34, bottom: 0, width: 2, background: `${T.brass}33` }} />
             )}
-            <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: "50%", background: T.brass, color: T.bgDeep, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14, zIndex: 1 }}>
+            <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: "50%", background: T.brass, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14, zIndex: 1 }}>
               {s.step}
             </div>
             <div style={{ paddingTop: 3 }}>
@@ -1205,7 +1205,7 @@ function CaseStudyDetail({ caseStudy, cat, onBack, completeCaseStudy }) {
           <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, margin: "0 0 4px" }}>{caseStudy.title}</h2>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, marginTop: 14 }}>{correctCount} / {CASE_STAGES.length}</div>
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: T.inkSoft, marginTop: 4 }}>stages answered correctly</div>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16, background: `${T.brass}22`, border: `1px solid ${T.brass}55`, borderRadius: 16, padding: "6px 14px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13, color: "#8A6D14" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16, background: `${T.brass}22`, border: `1px solid ${T.brass}55`, borderRadius: 16, padding: "6px 14px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13, color: "#4A3C99" }}>
             <Zap size={14} /> +{caseStudy.xp || 25} XP earned
           </div>
           <div style={{ marginTop: 22 }}>
@@ -1234,7 +1234,7 @@ function CaseStudyDetail({ caseStudy, cat, onBack, completeCaseStudy }) {
 
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           {CASE_STAGES.map((s, i) => (
-            <div key={s.key} style={{ flex: 1, textAlign: "center", padding: "6px 4px", borderRadius: 6, background: i === stageIndex ? T.brass : (answers[s.key] !== undefined ? `${T.sage}33` : `${T.ink}11`), fontFamily: FONT_MONO, fontSize: 10.5, fontWeight: 700, color: i === stageIndex ? T.bgDeep : T.inkSoft }}>
+            <div key={s.key} style={{ flex: 1, textAlign: "center", padding: "6px 4px", borderRadius: 6, background: i === stageIndex ? T.brass : (answers[s.key] !== undefined ? `${T.sage}33` : `${T.ink}11`), fontFamily: FONT_MONO, fontSize: 10.5, fontWeight: 700, color: i === stageIndex ? "#FFFFFF" : T.inkSoft }}>
               {s.label}
             </div>
           ))}
@@ -1390,7 +1390,7 @@ function Flashcards({ dbData, profile, setFlashcardStatus }) {
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
             <button onClick={() => advance("review")} className="psy-focus" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${T.rust}`, color: T.rust, borderRadius: 20, padding: "10px 14px", fontFamily: FONT_BODY, fontWeight: 600, fontSize: 13.5, cursor: "pointer" }}><X size={15} /> Still learning</button>
-            <button onClick={() => advance("known")} className="psy-focus" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: T.sage, border: "none", color: T.bgDeep, borderRadius: 20, padding: "10px 14px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}><Check size={15} /> Know it</button>
+            <button onClick={() => advance("known")} className="psy-focus" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: T.sage, border: "none", color: "#FFFFFF", borderRadius: 20, padding: "10px 14px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}><Check size={15} /> Know it</button>
           </div>
           <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, color: T.textMuted, marginTop: 12, textAlign: "center" }}>card {index + 1} of {deck.length}</div>
         </div>
@@ -2164,7 +2164,7 @@ export default function App() {
       <header style={{ padding: "18px 20px 0" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.brass, display: "flex", alignItems: "center", justifyContent: "center" }}><GraduationCap size={18} color={T.bgDeep} /></div>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.brass, display: "flex", alignItems: "center", justifyContent: "center" }}><GraduationCap size={18} color="#FFFFFF" /></div>
             <div>
               <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, color: T.textLight, lineHeight: 1 }}>Psych Catalog</div>
               <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, color: T.textMuted, letterSpacing: "0.06em" }}>PG · NET · SET · JRF prep</div>
