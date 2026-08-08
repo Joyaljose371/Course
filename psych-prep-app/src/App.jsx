@@ -118,7 +118,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-function InstallPrompt() {
+function InstallPrompt({ showAfterLogin = false }) {
   const [installEvent, setInstallEvent] = useState(() => deferredInstallPrompt);
   const [visible, setVisible] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -130,6 +130,10 @@ function InstallPrompt() {
 
     const lastPrompt = Number(localStorage.getItem("psych-install-prompted-at") || 0);
     const shouldRemind = Date.now() - lastPrompt > 30 * 24 * 60 * 60 * 1000;
+    if (deferredInstallPrompt) {
+      setInstallEvent(deferredInstallPrompt);
+      if (shouldRemind) setVisible(true);
+    }
     const handleBeforeInstall = (event) => {
       event.preventDefault();
       deferredInstallPrompt = event;
@@ -147,8 +151,8 @@ function InstallPrompt() {
     };
     window.addEventListener("appinstalled", handleInstalled);
     const fallbackTimer = window.setTimeout(() => {
-      if (shouldRemind && /iphone|ipad|ipod/i.test(window.navigator.userAgent)) setVisible(true);
-    }, 1200);
+      if (showAfterLogin || (shouldRemind && /iphone|ipad|ipod/i.test(window.navigator.userAgent))) setVisible(true);
+    }, showAfterLogin ? 700 : 1200);
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
       window.removeEventListener("psych-install-ready", handleInstallReady);
@@ -182,13 +186,13 @@ function InstallPrompt() {
       <button onClick={dismiss} className="psy-focus" aria-label="Dismiss install prompt" style={{ position: "absolute", top: 8, right: 8, border: "none", background: "none", color: T.textMuted, cursor: "pointer", padding: 3 }}><X size={15} /></button>
       <div style={{ display: "flex", alignItems: "center", gap: 9, paddingRight: 18 }}>
         <div style={{ width: 32, height: 32, borderRadius: 7, background: T.brass, display: "flex", alignItems: "center", justifyContent: "center" }}><Download size={16} color="#FFFFFF" /></div>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: T.textLight }}>Keep Psych Catalog close</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: T.textLight }}>Install Psych Catalog as a web app</div>
       </div>
       <div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.textMuted, margin: "9px 0 13px" }}>
-        Install the app for a focused, app-like study space. You can return to it from your home screen.
+        Use the browser's trusted install flow for a focused study space. This installs Psych Catalog as a web app, not from an unknown source.
       </div>
-      <PrimaryButton onClick={install} style={{ fontSize: 12.5, padding: "8px 13px" }}><Download size={14} /> Install app</PrimaryButton>
-      {!installEvent && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>Use your browser menu and choose “Add to Home Screen” or “Install app”.</div>}
+      <PrimaryButton onClick={install} style={{ fontSize: 12.5, padding: "8px 13px" }}><Download size={14} /> Install as web app</PrimaryButton>
+      {!installEvent && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>The browser install prompt is unavailable here. Use the browser menu and choose “Install app” or “Add to Home Screen”.</div>}
     </div>
   );
 }
@@ -2470,6 +2474,7 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: T.bgDeep, fontFamily: FONT_BODY }}>
       <FontLoader />
+      <InstallPrompt showAfterLogin />
       {loaded && needsOnboarding && <Onboarding categories={dbData.categories} onComplete={completeOnboarding} />}
       {loaded && showFocusEdit && !needsOnboarding && (
         <Onboarding categories={dbData.categories} initialName={profile.name} onComplete={(name, focus) => { completeOnboarding(name, focus); setShowFocusEdit(false); }} />
