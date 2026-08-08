@@ -109,8 +109,17 @@ const TextInput = (props) => <input className="psy-focus" {...props} style={{ ..
 const TextArea = (props) => <textarea className="psy-focus" {...props} style={{ ...inputStyle, resize: "vertical", minHeight: 70, ...(props.style || {}) }} />;
 const Select = (props) => <select className="psy-focus" {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
 
+let deferredInstallPrompt = null;
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    window.dispatchEvent(new Event("psych-install-ready"));
+  });
+}
+
 function InstallPrompt() {
-  const [installEvent, setInstallEvent] = useState(null);
+  const [installEvent, setInstallEvent] = useState(() => deferredInstallPrompt);
   const [visible, setVisible] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
@@ -123,26 +132,39 @@ function InstallPrompt() {
     const shouldRemind = Date.now() - lastPrompt > 30 * 24 * 60 * 60 * 1000;
     const handleBeforeInstall = (event) => {
       event.preventDefault();
+      deferredInstallPrompt = event;
       setInstallEvent(event);
       if (shouldRemind) setVisible(true);
     };
+    const handleInstallReady = () => setInstallEvent(deferredInstallPrompt);
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    window.addEventListener("psych-install-ready", handleInstallReady);
+    const handleInstalled = () => {
+      setIsStandalone(true);
+      setVisible(false);
+      setInstallEvent(null);
+      deferredInstallPrompt = null;
+    };
+    window.addEventListener("appinstalled", handleInstalled);
     const fallbackTimer = window.setTimeout(() => {
       if (shouldRemind && /iphone|ipad|ipod/i.test(window.navigator.userAgent)) setVisible(true);
     }, 1200);
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.removeEventListener("psych-install-ready", handleInstallReady);
+      window.removeEventListener("appinstalled", handleInstalled);
       window.clearTimeout(fallbackTimer);
     };
   }, []);
 
-  if (isStandalone || !visible) return null;
+  if (isStandalone) return null;
 
   const install = async () => {
     localStorage.setItem("psych-install-prompted-at", String(Date.now()));
-    if (!installEvent) { setVisible(false); return; }
+    if (!installEvent) { setVisible(true); return; }
     installEvent.prompt();
     await installEvent.userChoice;
+    deferredInstallPrompt = null;
     setInstallEvent(null);
     setVisible(false);
   };
@@ -150,6 +172,10 @@ function InstallPrompt() {
     localStorage.setItem("psych-install-prompted-at", String(Date.now()));
     setVisible(false);
   };
+
+  if (!visible) return (
+    <button onClick={install} className="psy-focus" style={{ position: "fixed", right: 18, bottom: 18, zIndex: 60, display: "inline-flex", alignItems: "center", gap: 6, background: T.brass, color: "#FFFFFF", border: "none", borderRadius: 20, padding: "9px 14px", boxShadow: "0 8px 18px rgba(108,92,231,0.3)", fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Download size={14} /> Install app</button>
+  );
 
   return (
     <div style={{ position: "fixed", right: 18, bottom: 18, zIndex: 60, width: "min(360px, calc(100vw - 36px))", background: T.paper, border: `1px solid ${T.bgPanelLight}`, borderRadius: 10, padding: 16, boxShadow: "0 12px 30px rgba(36,31,69,0.22)", fontFamily: FONT_BODY }}>
@@ -2386,7 +2412,8 @@ export default function App() {
     };
     const handleVideoPlay = () => {
       window.clearTimeout(hideTimer);
-      setChromeVisible(false);
+      if (window.innerWidth > 720) setChromeVisible(false);
+      else setChromeVisible(true);
     };
     const handleVideoPause = () => {
       window.clearTimeout(hideTimer);
