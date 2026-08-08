@@ -17,6 +17,7 @@ const COLLECTIONS = {
   dailyPosts: "dailyPosts",
   caseStudies: "caseStudies",
   journals: "journals",
+  publicTopics: "publicTopics",
 };
 
 const EMPTY_DB = { categories: [], topics: [], persons: [], quiz: [], flashcards: [], research: [], dailyPosts: [], caseStudies: [], journals: [] };
@@ -30,7 +31,6 @@ export function useContentDB(uid) {
   useEffect(() => {
     setDb(EMPTY_DB);
     setLoadedFlags({});
-    if (!uid) return undefined;
 
     const unsubs = Object.entries(COLLECTIONS).map(([listKey, collName]) =>
       onSnapshot(
@@ -75,6 +75,15 @@ export function useContentDB(uid) {
       console.error(`add failed for ${listKey}`, e);
       throw e;
     }
+  }, []);
+
+  const publishTopic = useCallback(async (topic) => {
+    const { id, ...data } = topic;
+    await setDoc(doc(db, "publicTopics", id), { ...data, sourceId: id, publishedAt: new Date().toISOString() });
+  }, []);
+
+  const unpublishTopic = useCallback(async (topicId) => {
+    await deleteDoc(doc(db, "publicTopics", topicId));
   }, []);
 
   const updateItem = useCallback(async (listKey, id, patch) => {
@@ -167,5 +176,5 @@ export function useContentDB(uid) {
     return summary;
   }, []);
 
-  return { db: db_, loaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent };
+  return { db: db_, loaded, addItem, updateItem, deleteItem, deleteCategory, publishTopic, unpublishTopic, seedStarterContent, exportContent, importContent };
 }

@@ -5,7 +5,7 @@ import {
   Search, RotateCcw, Award, BarChart2, GraduationCap, Home,
   CheckCircle2, XCircle, Sparkles, Shield, Plus, Trash2, Pencil, Lock,
   LogOut, Save, User, Mail, UploadCloud, Download, Upload, Flame, Zap, Share2,
-  ExternalLink, Globe, PlayCircle, FileText, Gauge,
+  ExternalLink, Globe, PlayCircle, FileText, Gauge, Maximize2, Minimize2,
 } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import { useProfile, useIsAdmin, useAdminDirectory, DEFAULT_ADMIN_PERMISSIONS, getLevelInfo } from "./hooks/useProfile";
@@ -46,6 +46,8 @@ const FontLoader = () => (
     .psy-mono-wrap, .psy-mono-wrap * { overflow-wrap: anywhere; word-break: break-word; }
     .psy-main { padding-top: 176px !important; transition: padding-top 220ms ease; }
     .psy-main.psy-main-chrome-hidden { padding-top: 176px !important; }
+    .psy-theater-toggle { display: inline-flex; }
+    @media (max-width: 720px) { .psy-theater-toggle { display: none !important; } }
     @media (max-width: 720px) { .psy-main { padding-top: 216px !important; } }
     @media (max-width: 720px) { .psy-main.psy-main-chrome-hidden { padding-top: 216px !important; } }
     @media (max-width: 720px) {
@@ -107,6 +109,64 @@ const TextInput = (props) => <input className="psy-focus" {...props} style={{ ..
 const TextArea = (props) => <textarea className="psy-focus" {...props} style={{ ...inputStyle, resize: "vertical", minHeight: 70, ...(props.style || {}) }} />;
 const Select = (props) => <select className="psy-focus" {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
 
+function InstallPrompt() {
+  const [installEvent, setInstallEvent] = useState(null);
+  const [visible, setVisible] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    setIsStandalone(standalone);
+    if (standalone) return undefined;
+
+    const lastPrompt = Number(localStorage.getItem("psych-install-prompted-at") || 0);
+    const shouldRemind = Date.now() - lastPrompt > 30 * 24 * 60 * 60 * 1000;
+    const handleBeforeInstall = (event) => {
+      event.preventDefault();
+      setInstallEvent(event);
+      if (shouldRemind) setVisible(true);
+    };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    const fallbackTimer = window.setTimeout(() => {
+      if (shouldRemind && /iphone|ipad|ipod/i.test(window.navigator.userAgent)) setVisible(true);
+    }, 1200);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.clearTimeout(fallbackTimer);
+    };
+  }, []);
+
+  if (isStandalone || !visible) return null;
+
+  const install = async () => {
+    localStorage.setItem("psych-install-prompted-at", String(Date.now()));
+    if (!installEvent) { setVisible(false); return; }
+    installEvent.prompt();
+    await installEvent.userChoice;
+    setInstallEvent(null);
+    setVisible(false);
+  };
+  const dismiss = () => {
+    localStorage.setItem("psych-install-prompted-at", String(Date.now()));
+    setVisible(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", right: 18, bottom: 18, zIndex: 60, width: "min(360px, calc(100vw - 36px))", background: T.paper, border: `1px solid ${T.bgPanelLight}`, borderRadius: 10, padding: 16, boxShadow: "0 12px 30px rgba(36,31,69,0.22)", fontFamily: FONT_BODY }}>
+      <button onClick={dismiss} className="psy-focus" aria-label="Dismiss install prompt" style={{ position: "absolute", top: 8, right: 8, border: "none", background: "none", color: T.textMuted, cursor: "pointer", padding: 3 }}><X size={15} /></button>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, paddingRight: 18 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 7, background: T.brass, display: "flex", alignItems: "center", justifyContent: "center" }}><Download size={16} color="#FFFFFF" /></div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: T.textLight }}>Keep Psych Catalog close</div>
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.textMuted, margin: "9px 0 13px" }}>
+        Install the app for a focused, app-like study space. You can return to it from your home screen.
+      </div>
+      <PrimaryButton onClick={install} style={{ fontSize: 12.5, padding: "8px 13px" }}><Download size={14} /> Install app</PrimaryButton>
+      {!installEvent && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>Use your browser menu and choose “Add to Home Screen” or “Install app”.</div>}
+    </div>
+  );
+}
+
 /* ============================== AUTH SCREEN ============================== */
 function AuthScreen({ signUp, logIn }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
@@ -132,6 +192,7 @@ function AuthScreen({ signUp, logIn }) {
   return (
     <div style={{ minHeight: "100vh", background: T.bgDeep, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_BODY }}>
       <FontLoader />
+      <InstallPrompt />
       <div style={{ background: T.paper, borderRadius: 12, padding: 30, maxWidth: 380, width: "100%", color: T.ink, boxShadow: "0 20px 50px rgba(0,0,0,0.4)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <GraduationCap size={20} color={T.brass} />
@@ -684,7 +745,7 @@ function getYouTubeEmbedUrl(url) {
       else if (u.pathname.startsWith("/shorts/")) videoId = u.pathname.split("/shorts/")[1];
     }
     videoId = videoId ? videoId.split("?")[0].split("&")[0] : null;
-    return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
+    return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` : null;
   } catch (e) {
     return null;
   }
@@ -725,6 +786,7 @@ const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 function VideoPlayer({ url, isAdmin }) {
   const videoRef = React.useRef(null);
+  const youtubeFrameRef = React.useRef(null);
   const [speed, setSpeed] = useState(1);
   const youTubeEmbedUrl = getYouTubeEmbedUrl(url);
   const driveEmbedUrl = !youTubeEmbedUrl ? getGoogleDriveEmbedUrl(url) : null;
@@ -732,6 +794,25 @@ function VideoPlayer({ url, isAdmin }) {
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = speed;
   }, [speed]);
+
+  useEffect(() => {
+    if (!youTubeEmbedUrl) return undefined;
+    const handleYouTubeMessage = (event) => {
+      if (event.origin !== "https://www.youtube.com") return;
+      let data;
+      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; } catch (e) { return; }
+      if (data?.event !== "onStateChange") return;
+      if (data.info === 1) window.dispatchEvent(new Event("psych-video-play"));
+      if (data.info === 0 || data.info === 2) window.dispatchEvent(new Event("psych-video-pause"));
+    };
+    window.addEventListener("message", handleYouTubeMessage);
+    return () => window.removeEventListener("message", handleYouTubeMessage);
+  }, [youTubeEmbedUrl]);
+
+  const connectYouTubeEvents = () => {
+    youtubeFrameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: "psych-topic-video", channel: "psych-catalog" }), "*");
+    youtubeFrameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "addEventListener", args: ["onStateChange"], id: "psych-topic-video", channel: "psych-catalog" }), "*");
+  };
 
   if (!url) return null;
 
@@ -742,10 +823,12 @@ function VideoPlayer({ url, isAdmin }) {
       <div style={{ marginBottom: 22 }}>
         <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 8, overflow: "hidden", background: "#000" }}>
           <iframe
+            ref={youtubeFrameRef}
             src={youTubeEmbedUrl}
             title="Topic video"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            onLoad={connectYouTubeEvents}
             allowFullScreen
           />
         </div>
@@ -776,7 +859,7 @@ function VideoPlayer({ url, isAdmin }) {
   const directVideoUrl = isCloudflareR2Url(url) ? url.trim() : url;
   return (
     <div style={{ marginBottom: 22 }}>
-      <video ref={videoRef} src={directVideoUrl} controls playsInline preload="metadata" style={{ width: "100%", aspectRatio: "16 / 9", borderRadius: 8, background: "#000", display: "block", objectFit: "contain" }} />
+      <video ref={videoRef} src={directVideoUrl} controls playsInline preload="metadata" onPlay={() => window.dispatchEvent(new Event("psych-video-play"))} onPause={() => window.dispatchEvent(new Event("psych-video-pause"))} onEnded={() => window.dispatchEvent(new Event("psych-video-pause"))} style={{ width: "100%", aspectRatio: "16 / 9", borderRadius: 8, background: "#000", display: "block", objectFit: "contain" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <Gauge size={14} color={T.textMuted} />
         <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: T.textMuted, marginRight: 4 }}>Speed:</span>
@@ -855,15 +938,16 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
   );
 }
 
-function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, isAdmin }) {
+function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, isAdmin, publicView = false, onRequireLogin }) {
+  const [theaterMode, setTheaterMode] = useState(Boolean(topic.videoUrl));
   const isBookmarked = profile.bookmarks.includes(topic.id);
   const isMastered = profile.readTopics.includes(topic.id);
   const resourceLinks = Array.isArray(topic.resourceLinks) ? topic.resourceLinks : [];
 
   return (
     <div>
-      <button onClick={onBack} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: T.brassLight, fontFamily: FONT_BODY, fontSize: 13, cursor: "pointer", marginBottom: 16, padding: 0 }}><ChevronLeft size={15} /> Back to drawer</button>
-      <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 24px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)", maxWidth: 720 }}>
+      <button onClick={publicView ? onRequireLogin : onBack} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: T.brassLight, fontFamily: FONT_BODY, fontSize: 13, cursor: "pointer", marginBottom: 16, padding: 0 }}><ChevronLeft size={15} /> {publicView ? "Log in to browse more" : "Back to drawer"}</button>
+      <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 24px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)", width: "100%", maxWidth: theaterMode ? 1080 : 720, transition: "max-width 220ms ease" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
           <div style={{ display: "flex", gap: 8 }}>
@@ -873,7 +957,7 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, is
               text={`${topic.name} — Psych Catalog`}
               style={{ border: `1px solid ${T.ink}33`, color: T.ink }}
             />
-            <button onClick={() => toggleBookmark(topic.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${T.ink}33`, borderRadius: 16, padding: "5px 11px", cursor: "pointer", color: isBookmarked ? T.rust : T.ink, fontFamily: FONT_BODY, fontSize: 12 }}>
+            <button onClick={publicView ? onRequireLogin : () => toggleBookmark(topic.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${T.ink}33`, borderRadius: 16, padding: "5px 11px", cursor: "pointer", color: isBookmarked ? T.rust : T.ink, fontFamily: FONT_BODY, fontSize: 12 }}>
               {isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />} {isBookmarked ? "Bookmarked" : "Bookmark"}
             </button>
           </div>
@@ -883,8 +967,13 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, is
 
         {topic.videoUrl && (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>
-              <PlayCircle size={13} /> Video
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint }}>
+                <PlayCircle size={13} /> Video
+              </div>
+              <button onClick={() => setTheaterMode((mode) => !mode)} className="psy-focus psy-theater-toggle" style={{ alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${T.ink}22`, borderRadius: 6, padding: "5px 8px", color: T.inkSoft, cursor: "pointer", fontFamily: FONT_BODY, fontSize: 11.5 }} aria-label={theaterMode ? "Exit theatre mode" : "Enter theatre mode"}>
+                {theaterMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {theaterMode ? "Exit theatre" : "Theatre mode"}
+              </button>
             </div>
             <VideoPlayer url={topic.videoUrl} isAdmin={isAdmin} />
           </>
@@ -911,7 +1000,9 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, is
         )}
 
         <div style={{ borderTop: `1px solid ${T.ink}22`, paddingTop: 18 }}>
-          {isMastered ? (
+          {publicView ? (
+            <PrimaryButton onClick={onRequireLogin}><Lock size={15} /> Log in to continue studying</PrimaryButton>
+          ) : isMastered ? (
             <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: `${T.sage}22`, border: `1px solid ${T.sage}`, color: "#3D6B5C", borderRadius: 20, padding: "9px 18px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13.5 }}>
               <CheckCircle2 size={16} /> Mastered
             </div>
@@ -1072,18 +1163,42 @@ function Quiz({ dbData, addQuizResult }) {
       setPhase("result");
     }
   };
+  const quitQuiz = () => {
+    setPhase("setup");
+    setQuestions([]);
+    setIndex(0);
+    setSelectedOpt(null);
+    setAnswers([]);
+  };
   const score = answers.filter((a) => a.correct).length;
 
   if (phase === "setup") return (
     <div>
       <SectionHeading eyebrow="Practice Drawer" title="Quiz mode" />
-      <div style={{ background: T.paper, borderRadius: 10, padding: 24, maxWidth: 460 }}>
-        <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: T.ink, marginBottom: 10, fontWeight: 600 }}>Choose a category</div>
-        <ChipStrip style={{ marginBottom: 20 }}>
-          <FilterChip label="All categories" active={category === "all"} onClick={() => setCategory("all")} />
-          {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={category === c.id} onClick={() => setCategory(c.id)} />)}
-        </ChipStrip>
-        {dbData.quiz.filter((q) => category === "all" || q.categoryId === category).length === 0 ? <EmptyState text="No quiz questions in this category yet." /> : <PrimaryButton onClick={startQuiz}>Start quiz <ChevronRight size={15} /></PrimaryButton>}
+      <div style={{ background: T.paper, borderRadius: 10, padding: "28px clamp(20px, 4vw, 38px)", width: "100%", maxWidth: 760, color: T.ink, boxShadow: "0 8px 22px rgba(36,31,69,0.12)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, flexWrap: "wrap", marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ width: 42, height: 42, flex: "0 0 42px", borderRadius: 10, background: `${T.brass}18`, display: "flex", alignItems: "center", justifyContent: "center" }}><ClipboardList size={21} color={T.brass} /></div>
+            <div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 21 }}>Build your practice set</div>
+              <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.55, color: T.inkSoft, marginTop: 4, maxWidth: 500 }}>Choose a focus area, then work through a fresh set of exam-style questions at your own pace.</div>
+            </div>
+          </div>
+          <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.brassLight, background: `${T.brass}12`, border: `1px solid ${T.brass}33`, borderRadius: 6, padding: "7px 9px", whiteSpace: "nowrap" }}>{dbData.quiz.length} questions available</div>
+        </div>
+        <div style={{ background: `${T.ink}08`, border: `1px solid ${T.ink}16`, borderRadius: 8, padding: "14px 16px 4px", marginBottom: 20 }}>
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: T.ink, marginBottom: 10, fontWeight: 700 }}>Choose a category</div>
+          <ChipStrip style={{ marginBottom: 10 }}>
+            <FilterChip label="All categories" active={category === "all"} onClick={() => setCategory("all")} />
+            {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={category === c.id} onClick={() => setCategory(c.id)} />)}
+          </ChipStrip>
+        </div>
+        {dbData.quiz.filter((q) => category === "all" || q.categoryId === category).length === 0 ? <EmptyState text="No quiz questions in this category yet." /> : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft }}>{dbData.quiz.filter((q) => category === "all" || q.categoryId === category).length} questions in this set</div>
+            <PrimaryButton onClick={startQuiz}>Start quiz <ChevronRight size={15} /></PrimaryButton>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1108,6 +1223,9 @@ function Quiz({ dbData, addQuizResult }) {
     <div>
       <SectionHeading eyebrow="Practice Drawer" title="Quiz mode" right={<span style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.textMuted }}>Question {index + 1} / {questions.length} · Score {score}</span>} />
       <div style={{ background: T.paper, borderRadius: 10, padding: 24, maxWidth: 560, color: T.ink }}>
+        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 16 }}>
+          <GhostButton onClick={quitQuiz} style={{ color: T.rust, borderColor: `${T.rust}66`, background: `${T.rust}0A` }}><ChevronLeft size={14} /> Quit quiz</GhostButton>
+        </div>
         <CatalogStamp tint={catOf(q.categoryId).tint}>{catOf(q.categoryId).name}</CatalogStamp>
         {q.scenario && (
           <div style={{ background: `${T.ink}0D`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "12px 14px", margin: "14px 0" }}>
@@ -1452,7 +1570,28 @@ function AdminAccessDenied({ sectionLabel }) {
   );
 }
 
-function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent, adminData, admins, saveAdmin, removeAdmin, currentUid }) {
+function AdminPublicContent({ dbData, publishTopic, unpublishTopic }) {
+  const publishedIds = new Set(dbData.publicTopics.map((topic) => topic.sourceId || topic.id));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 8, padding: 14, color: T.textMuted, fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.5 }}>
+        Choose which topics non-logged-in visitors can open through shared links. Only published topic snapshots are public.
+      </div>
+      {dbData.topics.map((topic) => {
+        const published = publishedIds.has(topic.id);
+        return (
+          <div key={topic.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 8, padding: "11px 14px" }}>
+            <div style={{ minWidth: 0 }}><div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, color: T.textLight }}>{topic.name}</div><div style={{ fontFamily: FONT_MONO, fontSize: 10.5, color: T.textMuted, marginTop: 3 }}>{published ? "PUBLIC LINK ENABLED" : "PRIVATE"}</div></div>
+            {published ? <GhostButton onClick={() => unpublishTopic(topic.id)} danger><X size={13} /> Remove public</GhostButton> : <PrimaryButton onClick={() => publishTopic(topic)}><Globe size={14} /> Publish</PrimaryButton>}
+          </div>
+        );
+      })}
+      {dbData.topics.length === 0 && <EmptyState text="No topics available to publish." />}
+    </div>
+  );
+}
+
+function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, publishTopic, unpublishTopic, seedStarterContent, exportContent, importContent, adminData, admins, saveAdmin, removeAdmin, currentUid }) {
   const [tab, setTab] = useState("categories");
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState("");
@@ -1461,6 +1600,7 @@ function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, s
   const canManageAdmins = isSuperAdmin || Boolean(adminData?.permissions?.canManageAdmins);
   const tabs = [
     ...ADMIN_TABS,
+    { id: "publicContent", label: "Public Content" },
     ...(canManageAdmins ? [{ id: "admins", label: "Admins" }] : []),
   ];
 
@@ -1492,6 +1632,7 @@ function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, s
       {tab === "caseStudies" && <AdminSectionGate canAccess={canManageSection("caseStudies")} sectionLabel="case studies"><AdminCaseStudies dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} /></AdminSectionGate>}
       {tab === "journals" && <AdminSectionGate canAccess={canManageSection("journals")} sectionLabel="explore / journals"><AdminJournals dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} /></AdminSectionGate>}
       {tab === "importExport" && <AdminSectionGate canAccess={isSuperAdmin || Boolean(adminData?.permissions?.canImportExport)} sectionLabel="imports and exports"><AdminImportExport dbData={dbData} exportContent={exportContent} importContent={importContent} /></AdminSectionGate>}
+      {tab === "publicContent" && <AdminSectionGate canAccess={canManageSection("topics")} sectionLabel="public content"><AdminPublicContent dbData={dbData} publishTopic={publishTopic} unpublishTopic={unpublishTopic} /></AdminSectionGate>}
       {tab === "admins" && (canManageAdmins ? <AdminDirectoryPanel admins={admins} saveAdmin={saveAdmin} removeAdmin={removeAdmin} currentUid={currentUid} currentAdminData={adminData} /> : <AdminAccessDenied sectionLabel="admin management" />)}
     </div>
   );
@@ -1901,7 +2042,11 @@ function AdminShell({ formTitle, form, list }) {
 
 function useEditableForm(initial) {
   const [form, setForm] = useState(initial);
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingIdState] = useState(null);
+  const setEditingId = useCallback((id) => {
+    setEditingIdState(id);
+    if (id) window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }, []);
   const reset = () => { setForm(initial); setEditingId(null); };
   return { form, setForm, editingId, setEditingId, reset };
 }
@@ -2139,13 +2284,78 @@ function AdminResearch({ dbData, addItem, updateItem, deleteItem }) {
   );
 }
 
+const PUBLIC_PROFILE = { bookmarks: [], readTopics: [] };
+
+function PublicShell({ children, onLogin }) {
+  return (
+    <div style={{ minHeight: "100vh", background: T.bgDeep, fontFamily: FONT_BODY }}>
+      <FontLoader />
+      <InstallPrompt />
+      <header style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 20px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "12px 14px", background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 9, boxShadow: "0 4px 14px rgba(36,31,69,0.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 7, background: T.brass, display: "flex", alignItems: "center", justifyContent: "center" }}><GraduationCap size={16} color="#FFFFFF" /></div>
+            <div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: T.textLight }}>Psych Catalog</div>
+              <div style={{ fontFamily: FONT_MONO, fontSize: 9.5, color: T.textMuted, letterSpacing: "0.08em", textTransform: "uppercase" }}>A shared field note</div>
+            </div>
+          </div>
+          <button onClick={onLogin} className="psy-focus" style={{ border: `1px solid ${T.brass}`, background: `${T.brass}12`, color: T.brassLight, borderRadius: 16, padding: "7px 12px", fontFamily: FONT_BODY, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Join the catalog</button>
+        </div>
+      </header>
+      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 20px 60px" }}>{children}</main>
+    </div>
+  );
+}
+
+function PublicContentView({ dbData, topicId, caseId, signUp, logIn }) {
+  const [showAuth, setShowAuth] = useState(false);
+  const requireLogin = () => setShowAuth(true);
+  const topic = topicId ? dbData.publicTopics.find((item) => item.id === topicId) : null;
+  const caseStudy = caseId ? dbData.caseStudies.find((item) => item.id === caseId) : null;
+  const catOf = (id) => dbData.categories.find((item) => item.id === id) || { name: id, tint: T.brass };
+
+  if (showAuth) return <AuthScreen signUp={signUp} logIn={logIn} />;
+  if (topic) {
+    return (
+      <PublicShell onLogin={requireLogin}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: `${T.brass}15`, border: `1px solid ${T.brass}44`, borderRadius: 16, padding: "6px 11px", fontFamily: FONT_BODY, fontSize: 12, color: T.brassLight, marginBottom: 14 }}><Globe size={13} /> Shared preview · read-only</div>
+        <TopicDetail topic={topic} cat={catOf(topic.categoryId)} onBack={requireLogin} profile={PUBLIC_PROFILE} toggleBookmark={requireLogin} markRead={requireLogin} isAdmin={false} publicView onRequireLogin={requireLogin} />
+      </PublicShell>
+    );
+  }
+  if (caseStudy) {
+    const cat = catOf(caseStudy.categoryId);
+    return (
+      <PublicShell onLogin={requireLogin}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: `${T.brass}15`, border: `1px solid ${T.brass}44`, borderRadius: 16, padding: "6px 11px", fontFamily: FONT_BODY, fontSize: 12, color: T.brassLight, marginBottom: 14 }}><Globe size={13} /> Shared preview · read-only</div>
+          <div style={{ background: T.paper, borderRadius: 10, padding: "26px", maxWidth: 620, color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }}>
+            <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
+            <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 26, margin: "14px 0 10px" }}>{caseStudy.title}</h1>
+            <p style={{ fontFamily: FONT_BODY, fontSize: 14.5, lineHeight: 1.7, margin: "0 0 20px" }}>{caseStudy.scenario}</p>
+            <PrimaryButton onClick={requireLogin}><Lock size={15} /> Log in to work through this case</PrimaryButton>
+          </div>
+      </PublicShell>
+    );
+  }
+  return (
+    <div style={{ minHeight: "100vh", background: T.bgDeep, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_BODY }}>
+      <div style={{ maxWidth: 420, width: "100%", background: T.paper, borderRadius: 10, padding: 24, color: T.ink, textAlign: "center" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 700 }}>Content link unavailable</div>
+        <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: T.inkSoft, lineHeight: 1.6, marginTop: 8 }}>This link does not match a published topic or case study. Sign in to browse the catalog.</div>
+        <PrimaryButton onClick={() => setShowAuth(true)} style={{ margin: "16px auto 0" }}><Lock size={15} /> Log in</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
 /* ============================== APP ============================== */
 export default function App() {
   const { user, authLoaded, signUp, logIn, logOut } = useAuth();
   const { profile, loaded: profileLoaded, profileError, update, toggleBookmark, markRead, addQuizResult, setFlashcardStatus, recordDailyVisit, completeDailyPost, toggleSaveDaily, completeCaseStudy } = useProfile(user?.uid);
   const { isAdmin, adminData, loaded: adminLoaded } = useIsAdmin(user?.uid);
   const { admins, loaded: adminDirectoryLoaded, saveAdmin, removeAdmin } = useAdminDirectory();
-  const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent } = useContentDB(user?.uid);
+  const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, publishTopic, unpublishTopic, seedStarterContent, exportContent, importContent } = useContentDB(user?.uid);
 
   const [active, setActive] = useState(() => new URLSearchParams(window.location.search).get("page") || "dashboard");
   const [deepLinkTopicId] = useState(() => new URLSearchParams(window.location.search).get("topic"));
@@ -2174,14 +2384,26 @@ export default function App() {
       }
       revealChrome();
     };
+    const handleVideoPlay = () => {
+      window.clearTimeout(hideTimer);
+      setChromeVisible(false);
+    };
+    const handleVideoPause = () => {
+      window.clearTimeout(hideTimer);
+      setChromeVisible(true);
+    };
     const activityEvents = ["pointerdown", "keydown", "touchstart"];
     activityEvents.forEach((event) => window.addEventListener(event, revealChrome, { passive: true }));
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("psych-video-play", handleVideoPlay);
+    window.addEventListener("psych-video-pause", handleVideoPause);
     setChromeVisible(true);
     return () => {
       window.clearTimeout(hideTimer);
       activityEvents.forEach((event) => window.removeEventListener(event, revealChrome));
       window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("psych-video-play", handleVideoPlay);
+      window.removeEventListener("psych-video-pause", handleVideoPause);
     };
   }, []);
 
@@ -2203,7 +2425,16 @@ export default function App() {
     return <div style={{ minHeight: "100vh", background: T.bgDeep, color: T.textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_BODY }}>Loading…</div>;
   }
 
-  if (!user) return <AuthScreen signUp={signUp} logIn={logIn} />;
+  if (!user) {
+    const hasPublicDeepLink = Boolean(deepLinkTopicId || deepLinkCaseId);
+    if (hasPublicDeepLink) {
+      if (!contentLoaded) {
+        return <div style={{ minHeight: "100vh", background: T.bgDeep, color: T.textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_BODY }}>Loading shared content…</div>;
+      }
+      return <PublicContentView dbData={dbData} topicId={deepLinkTopicId} caseId={deepLinkCaseId} signUp={signUp} logIn={logIn} />;
+    }
+    return <AuthScreen signUp={signUp} logIn={logIn} />;
+  }
 
   const needsOnboarding = loaded && !profile.name;
 
@@ -2268,7 +2499,7 @@ export default function App() {
             {active === "caseStudies" && <CaseStudies dbData={dbData} completeCaseStudy={completeCaseStudy} profile={profile} deepLinkCaseId={deepLinkCaseId} />}
             {active === "explore" && <Explore dbData={dbData} />}
             {active === "flashcards" && <Flashcards dbData={dbData} profile={profile} setFlashcardStatus={setFlashcardStatus} />}
-            {active === "admin" && isAdmin && <AdminPanel dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} deleteCategory={deleteCategory} seedStarterContent={seedStarterContent} exportContent={exportContent} importContent={importContent} adminData={adminData} admins={admins} saveAdmin={saveAdmin} removeAdmin={removeAdmin} currentUid={user?.uid} />}
+            {active === "admin" && isAdmin && <AdminPanel dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} deleteCategory={deleteCategory} publishTopic={publishTopic} unpublishTopic={unpublishTopic} seedStarterContent={seedStarterContent} exportContent={exportContent} importContent={importContent} adminData={adminData} admins={admins} saveAdmin={saveAdmin} removeAdmin={removeAdmin} currentUid={user?.uid} />}
           </>
         )}
       </main>

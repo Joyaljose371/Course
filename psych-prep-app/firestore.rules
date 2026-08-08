@@ -42,17 +42,15 @@ service cloud.firestore {
     // document ID set to that user's UID (found under Authentication).
     match /admins/{uid} {
       allow read: if isSignedIn() && (
-        request.auth.uid == uid || isSuperAdmin() || isAdmin()
+        request.auth.uid == uid || isSuperAdmin() ||
+        (isAdmin() && getAdminData().permissions.canManageAdmins == true)
       );
-      allow write: if isSignedIn() && (
-        request.auth.uid == uid || isSuperAdmin() || (
-          isAdmin() && request.resource.data.permissions.canManageAdmins == true &&
-          resource == null
-        )
-      );
+      allow write: if isSuperAdmin() ||
+        (isAdmin() && getAdminData().permissions.canManageAdmins == true);
     }
 
-    // Shared content: any signed-in user can read; only admins can write.
+    // Course content is private to signed-in users; public previews use the
+    // separate published snapshot collection below.
     match /categories/{id} {
       allow read: if isSignedIn();
       allow write: if canManageSection('categories');
@@ -88,6 +86,10 @@ service cloud.firestore {
     match /journals/{id} {
       allow read: if isSignedIn();
       allow write: if canManageSection('journals');
+    }
+    match /publicTopics/{id} {
+      allow read: if true;
+      allow write: if canManageSection('topics');
     }
   }
 }
