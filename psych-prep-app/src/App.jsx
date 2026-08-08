@@ -44,6 +44,10 @@ const FontLoader = () => (
     .psy-card-grid { min-width: 0; }
     .psy-card-grid > * { min-width: 0; }
     .psy-mono-wrap, .psy-mono-wrap * { overflow-wrap: anywhere; word-break: break-word; }
+    .psy-main { padding-top: 176px !important; transition: padding-top 220ms ease; }
+    .psy-main.psy-main-chrome-hidden { padding-top: 176px !important; }
+    @media (max-width: 720px) { .psy-main { padding-top: 216px !important; } }
+    @media (max-width: 720px) { .psy-main.psy-main-chrome-hidden { padding-top: 216px !important; } }
     @media (max-width: 720px) {
       .psy-admin-grid { grid-template-columns: 1fr !important; }
     }
@@ -52,8 +56,8 @@ const FontLoader = () => (
 );
 
 /* ============================== SHARED UI BITS ============================== */
-const CatalogStamp = ({ children, tint }) => (
-  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, background: `${tint || T.brass}15`, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap" }}>{children}</span>
+const CatalogStamp = ({ children, tint, style }) => (
+  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, background: `${tint || T.brass}15`, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap", ...style }}>{children}</span>
 );
 const PunchHole = () => (
   <div style={{ position: "absolute", top: 10, left: 10, width: 10, height: 10, borderRadius: "50%", background: T.paperDark, boxShadow: `inset 0 0 0 1px ${T.ink}22` }} />
@@ -81,7 +85,10 @@ const EmptyState = ({ text }) => (
   <div style={{ fontFamily: FONT_BODY, color: T.textMuted, textAlign: "center", padding: "40px 20px", border: `1px dashed ${T.textMuted}44`, borderRadius: 8 }}>{text}</div>
 );
 const FilterChip = ({ label, active, onClick, tint }) => (
-  <button onClick={onClick} className="psy-focus" style={{ fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 16, cursor: "pointer", border: `1px solid ${active ? (tint || T.brass) : T.bgPanelLight}`, background: active ? `${tint || T.brass}22` : "transparent", color: active ? (tint || T.brassLight) : T.textMuted }}>{label}</button>
+  <button onClick={onClick} className="psy-focus" style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto", height: 32, whiteSpace: "nowrap", fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600, padding: "0 12px", borderRadius: 7, cursor: "pointer", border: `1px solid ${active ? (tint || T.brass) : T.bgPanelLight}`, background: active ? `${tint || T.brass}22` : "transparent", color: active ? (tint || T.brassLight) : T.textMuted, boxShadow: active ? `0 3px 8px ${tint || T.brass}22` : "none", transition: "background 150ms ease, box-shadow 150ms ease" }}>{label}</button>
+);
+const ChipStrip = ({ children, style }) => (
+  <div className="psy-scroll" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", overflowX: "auto", marginBottom: 22, padding: "2px 2px 5px", ...style }}>{children}</div>
 );
 const PrimaryButton = ({ children, onClick, type = "button", style, disabled }) => (
   <button type={type} onClick={onClick} disabled={disabled} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: disabled ? `${T.brass}77` : T.brass, color: "#FFFFFF", border: "none", borderRadius: 20, padding: "9px 16px", fontFamily: FONT_BODY, fontWeight: 600, fontSize: 13.5, cursor: disabled ? "not-allowed" : "pointer", boxShadow: disabled ? "none" : "0 4px 12px rgba(108,92,231,0.35)", ...style }}>{children}</button>
@@ -200,6 +207,22 @@ function Nav({ active, setActive, isAdmin }) {
         );
       })}
     </nav>
+  );
+}
+
+function AppFooter() {
+  return (
+    <footer style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 20px 28px", borderTop: `1px solid ${T.bgPanelLight}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", fontFamily: FONT_BODY, fontSize: 12, color: T.textMuted }}>
+      <div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14, color: T.textLight }}>Psych Catalog</div>
+        <div style={{ marginTop: 3 }}>Built for curious minds by Joyal Jose.</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <span style={{ color: T.textMuted }}>Know the mind. Meet the maker.</span>
+        <a href="https://www.linkedin.com/in/joyal-josepsy" target="_blank" rel="noopener noreferrer" style={{ color: T.brassLight, fontWeight: 600, textDecoration: "none" }}>LinkedIn</a>
+        <a href="https://joyaljose371.github.io/" target="_blank" rel="noopener noreferrer" style={{ color: T.brassLight, fontWeight: 600, textDecoration: "none" }}>Meet Joyal — Psychology, Research & Field Notes</a>
+      </div>
+    </footer>
   );
 }
 
@@ -689,6 +712,15 @@ function getGoogleDriveEmbedUrl(url) {
   }
 }
 
+function isCloudflareR2Url(url) {
+  try {
+    const host = new URL(url.trim()).hostname;
+    return host.endsWith(".r2.dev") || host.endsWith(".r2.cloudflarestorage.com");
+  } catch (e) {
+    return false;
+  }
+}
+
 const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 function VideoPlayer({ url, isAdmin }) {
@@ -722,12 +754,6 @@ function VideoPlayer({ url, isAdmin }) {
   }
 
   if (driveEmbedUrl) {
-    // Google Drive's internal player positions its own control bar based on
-    // the iframe's rendered dimensions at load time. A CSS `aspect-ratio` box
-    // resolves its height asynchronously (after the width is known), which
-    // was making Drive's controls render mid-video instead of at the bottom
-    // during playback. A plain fixed pixel height (matching Google's own
-    // recommended embed dimensions) avoids that timing issue entirely.
     return (
       <div style={{ marginBottom: 22 }}>
         <div style={{ width: "100%", height: 340, borderRadius: 8, overflow: "hidden", background: "#000" }}>
@@ -741,20 +767,16 @@ function VideoPlayer({ url, isAdmin }) {
             allowFullScreen
           />
         </div>
-        {isAdmin && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: T.textMuted, marginTop: 6 }}>
-            Playing from Google Drive. Speed control isn't available for Drive-hosted video — use a YouTube link or a direct video file (.mp4/.webm) if speed control matters for this topic.
-          </div>
-        )}
       </div>
     );
   }
 
-  // Direct video source (.mp4/.webm link etc.) — native controls
-  // plus an explicit speed selector, since browser-native speed controls vary.
+  // Direct video source, including Cloudflare R2 public or signed object URLs.
+  // R2 must return a video Content-Type and support byte-range requests.
+  const directVideoUrl = isCloudflareR2Url(url) ? url.trim() : url;
   return (
     <div style={{ marginBottom: 22 }}>
-      <video ref={videoRef} src={url} controls style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }} />
+      <video ref={videoRef} src={directVideoUrl} controls playsInline preload="metadata" style={{ width: "100%", aspectRatio: "16 / 9", borderRadius: 8, background: "#000", display: "block", objectFit: "contain" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <Gauge size={14} color={T.textMuted} />
         <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: T.textMuted, marginRight: 4 }}>Speed:</span>
@@ -797,10 +819,12 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
           <Search size={14} color={T.textMuted} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search topics..." className="psy-focus" style={{ background: "transparent", border: "none", outline: "none", color: T.textLight, fontFamily: FONT_BODY, fontSize: 13, width: 160 }} />
         </div>} />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
-        <FilterChip label="All" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
-        {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
-      </div>
+      {!selected && (
+        <ChipStrip>
+          <FilterChip label="All" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
+          {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
+        </ChipStrip>
+      )}
       {selected ? (
         <TopicDetail topic={selected} cat={catOf(selected.categoryId)} onBack={goBackFromTopic} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} isAdmin={isAdmin} />
       ) : filtered.length === 0 ? <EmptyState text="No topics match this search. Try a different keyword or category." /> : (
@@ -811,9 +835,11 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
             const isBookmarked = profile.bookmarks.includes(topic.id);
             return (
               <IndexCard key={topic.id} tint={cat.tint} onClick={() => setSelected(topic)}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
-                  <button onClick={(e) => { e.stopPropagation(); toggleBookmark(topic.id); }} className="psy-focus" style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: isBookmarked ? T.brass : T.inkSoft }} aria-label="bookmark">
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0 }}>
+                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                    <CatalogStamp tint={cat.tint} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>{cat.name}</CatalogStamp>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); toggleBookmark(topic.id); }} className="psy-focus" style={{ flex: "0 0 28px", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: 2, color: isBookmarked ? T.brass : T.inkSoft }} aria-label="bookmark">
                     {isBookmarked ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
                   </button>
                 </div>
@@ -908,10 +934,10 @@ function Theories({ dbData }) {
   return (
     <div>
       <SectionHeading eyebrow="Biographical Index" title="Theories & Persons" />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+      <ChipStrip>
         <FilterChip label="All" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
-      </div>
+      </ChipStrip>
       <p style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.textMuted, marginBottom: 18 }}>Tap a card to flip it and reveal the key idea.</p>
       {list.length === 0 ? <EmptyState text="No entries in this category yet." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 16 }}>
@@ -1053,10 +1079,10 @@ function Quiz({ dbData, addQuizResult }) {
       <SectionHeading eyebrow="Practice Drawer" title="Quiz mode" />
       <div style={{ background: T.paper, borderRadius: 10, padding: 24, maxWidth: 460 }}>
         <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: T.ink, marginBottom: 10, fontWeight: 600 }}>Choose a category</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+        <ChipStrip style={{ marginBottom: 20 }}>
           <FilterChip label="All categories" active={category === "all"} onClick={() => setCategory("all")} />
           {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={category === c.id} onClick={() => setCategory(c.id)} />)}
-        </div>
+        </ChipStrip>
         {dbData.quiz.filter((q) => category === "all" || q.categoryId === category).length === 0 ? <EmptyState text="No quiz questions in this category yet." /> : <PrimaryButton onClick={startQuiz}>Start quiz <ChevronRight size={15} /></PrimaryButton>}
       </div>
     </div>
@@ -1139,10 +1165,10 @@ function CaseStudies({ dbData, completeCaseStudy, profile, deepLinkCaseId }) {
   return (
     <div>
       <SectionHeading eyebrow="Applied Learning" title="Case Studies" />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+      <ChipStrip>
         <FilterChip label="All" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
-      </div>
+      </ChipStrip>
       {list.length === 0 ? <EmptyState text="No case studies in this category yet." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {list.map((cs) => {
@@ -1304,15 +1330,15 @@ function Explore({ dbData }) {
         A curated directory of psychology journals, literature databases, and open-access repositories — for finding real research, not just summaries. Each card opens the source directly in a new tab.
       </p>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+      <ChipStrip style={{ marginBottom: 10 }}>
         <FilterChip label="All categories" active={filterCat === "all"} onClick={() => setFilterCat("all")} />
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={filterCat === c.id} onClick={() => setFilterCat(c.id)} />)}
         <FilterChip label="General" active={filterCat === "general"} onClick={() => setFilterCat("general")} />
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+      </ChipStrip>
+      <ChipStrip>
         <FilterChip label="All types" active={filterType === "all"} onClick={() => setFilterType("all")} />
         {JOURNAL_TYPES.map((t) => <FilterChip key={t} label={t} active={filterType === t} onClick={() => setFilterType(t)} />)}
-      </div>
+      </ChipStrip>
 
       {list.length === 0 ? <EmptyState text="Nothing matches this search yet." /> : (
         <div className="psy-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
@@ -1365,10 +1391,10 @@ function Flashcards({ dbData, profile, setFlashcardStatus }) {
   return (
     <div>
       <SectionHeading eyebrow="Revision Drawer" title="Flashcards" right={deck.length > 0 && <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.textMuted }}>{knownCount}/{deck.length} known</span>} />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+      <ChipStrip>
         <FilterChip label="All" active={category === "all"} onClick={() => setCategory("all")} />
         {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={category === c.id} onClick={() => setCategory(c.id)} />)}
-      </div>
+      </ChipStrip>
       {!card ? <EmptyState text="No flashcards in this category." /> : (
         <div style={{ maxWidth: 480 }}>
           <div className={`card-flip ${flipped ? "flipped" : ""}`} style={{ perspective: 1200, height: 220, cursor: "pointer" }} onClick={() => setFlipped((f) => !f)}>
@@ -1453,9 +1479,9 @@ function AdminPanel({ dbData, addItem, updateItem, deleteItem, deleteCategory, s
         ) : undefined
       } />
       {seedMsg && <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.brassLight, marginBottom: 16 }}>{seedMsg}</div>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+      <ChipStrip>
         {tabs.map((t) => <FilterChip key={t.id} label={t.label} active={tab === t.id} onClick={() => setTab(t.id)} />)}
-      </div>
+      </ChipStrip>
       {tab === "categories" && <AdminSectionGate canAccess={canManageSection("categories")} sectionLabel="categories"><AdminCategories dbData={dbData} addItem={addItem} deleteCategory={deleteCategory} /></AdminSectionGate>}
       {tab === "topics" && <AdminSectionGate canAccess={canManageSection("topics")} sectionLabel="topics"><AdminTopics dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} /></AdminSectionGate>}
       {tab === "persons" && <AdminSectionGate canAccess={canManageSection("persons")} sectionLabel="theories and people"><AdminPersons dbData={dbData} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} /></AdminSectionGate>}
@@ -1939,7 +1965,7 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
         <Field label="Category"><Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>{dbData.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
         <Field label="Topic name"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Emotion Regulation" /></Field>
         <Field label="Landmark year"><TextInput value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} placeholder="e.g. 1998" /></Field>
-        <Field label="Video URL (optional — YouTube, Google Drive share link, or direct .mp4/.webm)"><TextInput value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/file/d/.../view" /></Field>
+        <Field label="Video URL (optional — YouTube, Drive, Cloudflare R2, or direct .mp4/.webm)"><TextInput value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} placeholder="https://pub-xxxx.r2.dev/videos/topic.mp4" /></Field>
         <Field label="Description / Summary"><TextArea value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="2-3 sentence overview" /></Field>
         <Field label="Key points (one per line)"><TextArea value={form.keyPoints} onChange={(e) => setForm({ ...form, keyPoints: e.target.value })} placeholder={"Point one\nPoint two"} /></Field>
         <Field label="Resource links (optional — one per line, format: Label | URL)"><TextArea value={form.resourceLinks} onChange={(e) => setForm({ ...form, resourceLinks: e.target.value })} placeholder={"Lecture slides | https://...\nOriginal paper | https://..."} /></Field>
@@ -2119,15 +2145,45 @@ export default function App() {
   const { profile, loaded: profileLoaded, profileError, update, toggleBookmark, markRead, addQuizResult, setFlashcardStatus, recordDailyVisit, completeDailyPost, toggleSaveDaily, completeCaseStudy } = useProfile(user?.uid);
   const { isAdmin, adminData, loaded: adminLoaded } = useIsAdmin(user?.uid);
   const { admins, loaded: adminDirectoryLoaded, saveAdmin, removeAdmin } = useAdminDirectory();
-  const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent } = useContentDB();
+  const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, seedStarterContent, exportContent, importContent } = useContentDB(user?.uid);
 
   const [active, setActive] = useState(() => new URLSearchParams(window.location.search).get("page") || "dashboard");
   const [deepLinkTopicId] = useState(() => new URLSearchParams(window.location.search).get("topic"));
   const [deepLinkCaseId] = useState(() => new URLSearchParams(window.location.search).get("case"));
   const [browseFilter, setBrowseFilter] = useState("all");
   const [showFocusEdit, setShowFocusEdit] = useState(false);
+  const [chromeVisible, setChromeVisible] = useState(true);
 
   const loaded = profileLoaded && adminLoaded && contentLoaded && adminDirectoryLoaded;
+
+  useEffect(() => {
+    const scrollThreshold = window.innerWidth <= 720 ? 216 : 176;
+    let hideTimer;
+    const revealChrome = () => {
+      setChromeVisible(true);
+      window.clearTimeout(hideTimer);
+      if (window.scrollY > scrollThreshold) {
+        hideTimer = window.setTimeout(() => setChromeVisible(false), 3500);
+      }
+    };
+    const handleScroll = () => {
+      if (window.scrollY <= scrollThreshold) {
+        window.clearTimeout(hideTimer);
+        setChromeVisible(true);
+        return;
+      }
+      revealChrome();
+    };
+    const activityEvents = ["pointerdown", "keydown", "touchstart"];
+    activityEvents.forEach((event) => window.addEventListener(event, revealChrome, { passive: true }));
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    setChromeVisible(true);
+    return () => {
+      window.clearTimeout(hideTimer);
+      activityEvents.forEach((event) => window.removeEventListener(event, revealChrome));
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   // Keep the URL's ?page= in sync with the active tab, so the current tab
   // is always a shareable/bookmarkable/refreshable link. Uses replaceState
@@ -2161,8 +2217,9 @@ export default function App() {
         <Onboarding categories={dbData.categories} initialName={profile.name} onComplete={(name, focus) => { completeOnboarding(name, focus); setShowFocusEdit(false); }} />
       )}
 
-      <header style={{ padding: "18px 20px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 30, transform: chromeVisible ? "translate3d(0, 0, 0)" : "translate3d(0, -100%, 0)", transition: "transform 220ms ease", willChange: "transform", background: T.bgDeep, boxShadow: chromeVisible ? "0 5px 18px rgba(36,31,69,0.12)" : "none" }}>
+        <header style={{ padding: "18px 20px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 34, height: 34, borderRadius: 8, background: T.brass, display: "flex", alignItems: "center", justifyContent: "center" }}><GraduationCap size={18} color="#FFFFFF" /></div>
             <div>
@@ -2186,10 +2243,11 @@ export default function App() {
               <GhostButton onClick={logOut}><LogOut size={13} /> Log out</GhostButton>
             </div>
           )}
-        </div>
-      </header>
+          </div>
+        </header>
 
-      <div style={{ marginTop: 16, position: "sticky", top: 0, zIndex: 10 }}><Nav active={active} setActive={setActive} isAdmin={isAdmin} /></div>
+        <div style={{ marginTop: 16 }}><Nav active={active} setActive={setActive} isAdmin={isAdmin} /></div>
+      </div>
 
       {profileError && (
         <div style={{ maxWidth: 1080, margin: "16px auto 0", padding: "12px 16px", borderRadius: 8, background: `${T.rust}18`, border: `1px solid ${T.rust}44`, color: T.textLight, fontFamily: FONT_BODY, fontSize: 13.5 }}>
@@ -2197,7 +2255,7 @@ export default function App() {
         </div>
       )}
 
-      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 20px 60px" }}>
+      <main className={`psy-main${chromeVisible ? "" : " psy-main-chrome-hidden"}`} style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 20px 60px" }}>
         {!loaded ? (
           <div style={{ color: T.textMuted, fontFamily: FONT_BODY, textAlign: "center", padding: 60 }}>Loading your catalog…</div>
         ) : (
@@ -2214,6 +2272,7 @@ export default function App() {
           </>
         )}
       </main>
+      <AppFooter />
     </div>
   );
 }

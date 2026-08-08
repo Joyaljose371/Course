@@ -21,13 +21,17 @@ const COLLECTIONS = {
 
 const EMPTY_DB = { categories: [], topics: [], persons: [], quiz: [], flashcards: [], research: [], dailyPosts: [], caseStudies: [], journals: [] };
 
-export function useContentDB() {
+export function useContentDB(uid) {
   const [db_, setDb] = useState(EMPTY_DB);
   const [loadedFlags, setLoadedFlags] = useState({});
   const dbRef = useRef(EMPTY_DB);
   dbRef.current = db_;
 
   useEffect(() => {
+    setDb(EMPTY_DB);
+    setLoadedFlags({});
+    if (!uid) return undefined;
+
     const unsubs = Object.entries(COLLECTIONS).map(([listKey, collName]) =>
       onSnapshot(
         collection(db, collName),
@@ -59,7 +63,7 @@ export function useContentDB() {
       )
     );
     return () => unsubs.forEach((u) => u());
-  }, []);
+  }, [uid]);
 
   const loaded = Object.keys(COLLECTIONS).every((k) => loadedFlags[k]);
 
