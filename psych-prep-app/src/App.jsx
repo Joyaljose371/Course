@@ -775,7 +775,7 @@ function getYouTubeEmbedUrl(url) {
       else if (u.pathname.startsWith("/shorts/")) videoId = u.pathname.split("/shorts/")[1];
     }
     videoId = videoId ? videoId.split("?")[0].split("&")[0] : null;
-    return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` : null;
+    return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1` : null;
   } catch (e) {
     return null;
   }
@@ -814,35 +814,11 @@ function isCloudflareR2Url(url) {
 
 const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
-function VideoPlayer({ url, isAdmin }) {
+const VideoPlayer = React.memo(function VideoPlayer({ url, isAdmin }) {
   const videoRef = React.useRef(null);
-  const youtubeFrameRef = React.useRef(null);
   const [speed, setSpeed] = useState(1);
   const youTubeEmbedUrl = getYouTubeEmbedUrl(url);
   const driveEmbedUrl = !youTubeEmbedUrl ? getGoogleDriveEmbedUrl(url) : null;
-
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = speed;
-  }, [speed]);
-
-  useEffect(() => {
-    if (!youTubeEmbedUrl) return undefined;
-    const handleYouTubeMessage = (event) => {
-      if (event.origin !== "https://www.youtube.com") return;
-      let data;
-      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; } catch (e) { return; }
-      if (data?.event !== "onStateChange") return;
-      if (data.info === 1) window.dispatchEvent(new Event("psych-video-play"));
-      if (data.info === 0 || data.info === 2) window.dispatchEvent(new Event("psych-video-pause"));
-    };
-    window.addEventListener("message", handleYouTubeMessage);
-    return () => window.removeEventListener("message", handleYouTubeMessage);
-  }, [youTubeEmbedUrl]);
-
-  const connectYouTubeEvents = () => {
-    youtubeFrameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: "psych-topic-video", channel: "psych-catalog" }), "*");
-    youtubeFrameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "addEventListener", args: ["onStateChange"], id: "psych-topic-video", channel: "psych-catalog" }), "*");
-  };
 
   if (!url) return null;
 
@@ -850,15 +826,14 @@ function VideoPlayer({ url, isAdmin }) {
     // YouTube's own embedded player already includes play/pause, seek,
     // volume, fullscreen, and a playback-speed option (gear icon).
     return (
-      <div style={{ marginBottom: 22 }}>
+      <div className="psy-video-player" style={{ marginBottom: 22 }}>
         <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 8, overflow: "hidden", background: "#000" }}>
           <iframe
-            ref={youtubeFrameRef}
             src={youTubeEmbedUrl}
             title="Topic video"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            onLoad={connectYouTubeEvents}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />
         </div>
@@ -868,7 +843,7 @@ function VideoPlayer({ url, isAdmin }) {
 
   if (driveEmbedUrl) {
     return (
-      <div style={{ marginBottom: 22 }}>
+      <div className="psy-video-player" style={{ marginBottom: 22 }}>
         <div style={{ width: "100%", height: 340, borderRadius: 8, overflow: "hidden", background: "#000" }}>
           <iframe
             src={driveEmbedUrl}
@@ -888,20 +863,20 @@ function VideoPlayer({ url, isAdmin }) {
   // R2 must return a video Content-Type and support byte-range requests.
   const directVideoUrl = isCloudflareR2Url(url) ? url.trim() : url;
   return (
-    <div style={{ marginBottom: 22 }}>
-      <video ref={videoRef} src={directVideoUrl} controls playsInline preload="metadata" onPlay={() => window.dispatchEvent(new Event("psych-video-play"))} onPause={() => window.dispatchEvent(new Event("psych-video-pause"))} onEnded={() => window.dispatchEvent(new Event("psych-video-pause"))} style={{ width: "100%", aspectRatio: "16 / 9", borderRadius: 8, background: "#000", display: "block", objectFit: "contain" }} />
+    <div className="psy-video-player" style={{ marginBottom: 22 }}>
+    <video ref={videoRef} src={directVideoUrl} controls playsInline preload="metadata" style={{ width: "100%", aspectRatio: "16 / 9", borderRadius: 8, background: "#000", display: "block", objectFit: "contain" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <Gauge size={14} color={T.textMuted} />
         <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: T.textMuted, marginRight: 4 }}>Speed:</span>
         {PLAYBACK_SPEEDS.map((s) => (
-          <button key={s} onClick={() => setSpeed(s)} className="psy-focus" style={{ padding: "3px 9px", borderRadius: 12, border: `1px solid ${speed === s ? T.brass : T.bgPanelLight}`, background: speed === s ? `${T.brass}22` : "transparent", color: speed === s ? T.brassLight : T.textMuted, fontFamily: FONT_MONO, fontSize: 11.5, cursor: "pointer" }}>
+          <button key={s} onClick={() => { setSpeed(s); if (videoRef.current) videoRef.current.playbackRate = s; }} className="psy-focus" style={{ padding: "3px 9px", borderRadius: 12, border: `1px solid ${speed === s ? T.brass : T.bgPanelLight}`, background: speed === s ? `${T.brass}22` : "transparent", color: speed === s ? T.brassLight : T.textMuted, fontFamily: FONT_MONO, fontSize: 11.5, cursor: "pointer" }}>
             {s}×
           </button>
         ))}
       </div>
     </div>
   );
-}
+});
 
 
 function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilterCat, isAdmin, deepLinkTopicId }) {
@@ -2397,44 +2372,58 @@ export default function App() {
   const loaded = profileLoaded && adminLoaded && contentLoaded && adminDirectoryLoaded;
 
   useEffect(() => {
-    const scrollThreshold = window.innerWidth <= 720 ? 216 : 176;
+    const isMobile = window.matchMedia("(max-width: 720px)").matches;
+    const scrollThreshold = isMobile ? 216 : 176;
+    let lastScrollY = window.scrollY;
+    let lastChromeToggleY = window.scrollY;
     let hideTimer;
-    const revealChrome = () => {
+    const isInsideVideo = (event) => event.target?.closest?.(".psy-video-player, iframe, video");
+    const isVideoVisible = () => {
+      const player = document.querySelector(".psy-video-player");
+      if (!player) return false;
+      const bounds = player.getBoundingClientRect();
+      return bounds.bottom > 0 && bounds.top < window.innerHeight;
+    };
+    const revealChrome = (event) => {
+      if (isInsideVideo(event)) return;
       setChromeVisible(true);
       window.clearTimeout(hideTimer);
-      if (window.scrollY > scrollThreshold) {
+      if (!isMobile && window.scrollY > scrollThreshold) {
         hideTimer = window.setTimeout(() => setChromeVisible(false), 3500);
       }
     };
     const handleScroll = () => {
+      const currentScrollY = window.scrollY;
       if (window.scrollY <= scrollThreshold) {
         window.clearTimeout(hideTimer);
         setChromeVisible(true);
+        lastScrollY = currentScrollY;
+        lastChromeToggleY = currentScrollY;
         return;
       }
-      revealChrome();
+      if (isVideoVisible()) {
+        lastScrollY = currentScrollY;
+        return;
+      }
+      if (isMobile) {
+        const scrollingDown = currentScrollY > lastScrollY;
+        const distanceFromToggle = Math.abs(currentScrollY - lastChromeToggleY);
+        if (distanceFromToggle >= 32) {
+          setChromeVisible(!scrollingDown);
+          lastChromeToggleY = currentScrollY;
+        }
+        lastScrollY = currentScrollY;
+        return;
+      }
+      revealChrome({ target: document.body });
     };
-    const handleVideoPlay = () => {
-      window.clearTimeout(hideTimer);
-      if (window.innerWidth > 720) setChromeVisible(false);
-      else setChromeVisible(true);
-    };
-    const handleVideoPause = () => {
-      window.clearTimeout(hideTimer);
-      setChromeVisible(true);
-    };
-    const activityEvents = ["pointerdown", "keydown", "touchstart"];
+    const activityEvents = isMobile ? ["keydown"] : ["pointerdown", "keydown", "touchstart"];
     activityEvents.forEach((event) => window.addEventListener(event, revealChrome, { passive: true }));
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("psych-video-play", handleVideoPlay);
-    window.addEventListener("psych-video-pause", handleVideoPause);
-    setChromeVisible(true);
     return () => {
       window.clearTimeout(hideTimer);
       activityEvents.forEach((event) => window.removeEventListener(event, revealChrome));
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("psych-video-play", handleVideoPlay);
-      window.removeEventListener("psych-video-pause", handleVideoPause);
     };
   }, []);
 
