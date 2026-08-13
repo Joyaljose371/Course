@@ -2359,7 +2359,11 @@ export default function App() {
   const { user, authLoaded, signUp, logIn, logOut } = useAuth();
   const { profile, loaded: profileLoaded, profileError, update, toggleBookmark, markRead, addQuizResult, setFlashcardStatus, recordDailyVisit, completeDailyPost, toggleSaveDaily, completeCaseStudy } = useProfile(user?.uid);
   const { isAdmin, adminData, loaded: adminLoaded } = useIsAdmin(user?.uid);
-  const { admins, loaded: adminDirectoryLoaded, saveAdmin, removeAdmin } = useAdminDirectory();
+  // Only admins who can actually manage other admins are allowed to read the
+  // "admins" collection at all (see firestore.rules) — everyone else would
+  // just get a permission error, so don't bother fetching for them.
+  const canManageAdmins = isAdmin && (adminData?.role === "super_admin" || Boolean(adminData?.permissions?.canManageAdmins));
+  const { admins, loaded: adminDirectoryLoaded, saveAdmin, removeAdmin } = useAdminDirectory(canManageAdmins);
   const { db: dbData, loaded: contentLoaded, addItem, updateItem, deleteItem, deleteCategory, publishTopic, unpublishTopic, seedStarterContent, exportContent, importContent } = useContentDB(user?.uid);
 
   const [active, setActive] = useState(() => new URLSearchParams(window.location.search).get("page") || "dashboard");

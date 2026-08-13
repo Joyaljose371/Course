@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { collection, deleteDoc, doc, onSnapshot, setDoc, getDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, onSnapshot, setDoc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 
 const DEFAULT_PROFILE = {
@@ -261,23 +261,34 @@ export function useIsAdmin(uid) {
   return { isAdmin, adminData, loaded };
 }
 
-export function useAdminDirectory() {
+// The "admins" collection is only readable by super-admins and admins with
+// canManageAdmins permission (see firestore.rules) — everyone else gets a
+// permission-denied. A real-time listener here used to be opened for EVERY
+// signed-in user unconditionally, which meant most sessions paid for a
+// listener that could never legally read anything. Now it's a one-time
+// fetch, and only runs at all when `enabled` (the caller decides who
+// actually needs it — i.e. only once we know the user can manage admins).
+export function useAdminDirectory(enabled) {
   const [admins, setAdmins] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    const ref = collection(db, "admins");
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        const rows = snap.docs.map((docSnap) => ({ uid: docSnap.id, ...normalizeAdminData(docSnap.data()) }));
-        setAdmins(rows);
-        setLoaded(true);
-      },
-      (e) => { console.error("admin directory load failed", e); setAdmins([]); setLoaded(true); }
-    );
-    return unsub;
+  const refresh = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, "admins"));
+      const rows = snap.docs.map((docSnap) => ({ uid: docSnap.id, ...normalizeAdminData(docSnap.data()) }));
+      setAdmins(rows);
+    } catch (e) {
+      console.error("admin directory load failed", e);
+      setAdmins([]);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!enabled) { setAdmins([]); setLoaded(true); return; }
+    refresh();
+  }, [enabled, refresh]);
 
   const saveAdmin = useCallback(async (uid, payload) => {
     if (!uid) return;
@@ -286,12 +297,14 @@ export function useAdminDirectory() {
       role: data?.role || "admin",
       permissions: data?.permissions || DEFAULT_ADMIN_PERMISSIONS,
     }, { merge: true });
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   const removeAdmin = useCallback(async (uid) => {
     if (!uid) return;
     await deleteDoc(doc(db, "admins", uid));
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   return { admins, loaded, saveAdmin, removeAdmin };
 }

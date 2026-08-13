@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
+  collection, addDoc, updateDoc, deleteDoc, doc,
   query, where, getDocs, writeBatch, setDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
@@ -22,48 +22,60 @@ const COLLECTIONS = {
 
 const EMPTY_DB = { categories: [], topics: [], persons: [], quiz: [], flashcards: [], research: [], dailyPosts: [], caseStudies: [], journals: [] };
 
+// Applies the same "stable, admin-controlled order" fixups the old
+// real-time listener used to apply per-snapshot.
+function normalizeItems(listKey, rawItems) {
+  let items = rawItems;
+  if (listKey === "research") {
+    items = items
+      .map((item, i) => ({ item, i }))
+      .sort((a, b) => {
+        const orderA = typeof a.item.order === "number" ? a.item.order : Infinity;
+        const orderB = typeof b.item.order === "number" ? b.item.order : Infinity;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.i - b.i; // stable fallback for items without an order value
+      })
+      .map((x) => x.item);
+  }
+  if (listKey === "dailyPosts") {
+    items = [...items].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  }
+  return items;
+}
+
 export function useContentDB(uid) {
   const [db_, setDb] = useState(EMPTY_DB);
   const [loadedFlags, setLoadedFlags] = useState({});
   const dbRef = useRef(EMPTY_DB);
   dbRef.current = db_;
 
+  // One-time fetch of a single collection (used both for the initial load
+  // and to refresh just the affected collection after a write). Content
+  // here is admin-edited reference material, not something that needs a
+  // live socket per viewer — a real-time onSnapshot per collection was
+  // costing a full collection read for every connected client on every
+  // single write anyone made, which is what drove the read spike.
+  const fetchCollection = useCallback(async (listKey) => {
+    const collName = COLLECTIONS[listKey];
+    try {
+      const snap = await getDocs(collection(db, collName));
+      const items = normalizeItems(listKey, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setDb((prev) => ({ ...prev, [listKey]: items }));
+      setLoadedFlags((prev) => ({ ...prev, [listKey]: true }));
+      return items;
+    } catch (e) {
+      console.error(`content fetch failed for ${collName}`, e);
+      setLoadedFlags((prev) => ({ ...prev, [listKey]: true }));
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
+    if (!uid) { setDb(EMPTY_DB); setLoadedFlags({}); return; }
     setDb(EMPTY_DB);
     setLoadedFlags({});
-
-    const unsubs = Object.entries(COLLECTIONS).map(([listKey, collName]) =>
-      onSnapshot(
-        collection(db, collName),
-        (snap) => {
-          let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          // Research sections are read top-to-bottom, so they need a stable,
-          // admin-controlled order instead of Firestore's unspecified default order.
-          if (listKey === "research") {
-            items = items
-              .map((item, i) => ({ item, i }))
-              .sort((a, b) => {
-                const orderA = typeof a.item.order === "number" ? a.item.order : Infinity;
-                const orderB = typeof b.item.order === "number" ? b.item.order : Infinity;
-                if (orderA !== orderB) return orderA - orderB;
-                return a.i - b.i; // stable fallback for items without an order value
-              })
-              .map((x) => x.item);
-          }
-          if (listKey === "dailyPosts") {
-            items = [...items].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
-          }
-          setDb((prev) => ({ ...prev, [listKey]: items }));
-          setLoadedFlags((prev) => ({ ...prev, [listKey]: true }));
-        },
-        (e) => {
-          console.error(`content subscription failed for ${collName}`, e);
-          setLoadedFlags((prev) => ({ ...prev, [listKey]: true }));
-        }
-      )
-    );
-    return () => unsubs.forEach((u) => u());
-  }, [uid]);
+    Object.keys(COLLECTIONS).forEach((listKey) => fetchCollection(listKey));
+  }, [uid, fetchCollection]);
 
   const loaded = Object.keys(COLLECTIONS).every((k) => loadedFlags[k]);
 
@@ -71,38 +83,43 @@ export function useContentDB(uid) {
     const { id, ...rest } = item; // Firestore assigns its own id
     try {
       await addDoc(collection(db, COLLECTIONS[listKey]), rest);
+      await fetchCollection(listKey);
     } catch (e) {
       console.error(`add failed for ${listKey}`, e);
       throw e;
     }
-  }, []);
+  }, [fetchCollection]);
 
   const publishTopic = useCallback(async (topic) => {
     const { id, ...data } = topic;
     await setDoc(doc(db, "publicTopics", id), { ...data, sourceId: id, publishedAt: new Date().toISOString() });
-  }, []);
+    await fetchCollection("publicTopics");
+  }, [fetchCollection]);
 
   const unpublishTopic = useCallback(async (topicId) => {
     await deleteDoc(doc(db, "publicTopics", topicId));
-  }, []);
+    await fetchCollection("publicTopics");
+  }, [fetchCollection]);
 
   const updateItem = useCallback(async (listKey, id, patch) => {
     try {
       await updateDoc(doc(db, COLLECTIONS[listKey], id), patch);
+      await fetchCollection(listKey);
     } catch (e) {
       console.error(`update failed for ${listKey}/${id}`, e);
       throw e;
     }
-  }, []);
+  }, [fetchCollection]);
 
   const deleteItem = useCallback(async (listKey, id) => {
     try {
       await deleteDoc(doc(db, COLLECTIONS[listKey], id));
+      await fetchCollection(listKey);
     } catch (e) {
       console.error(`delete failed for ${listKey}/${id}`, e);
       throw e;
     }
-  }, []);
+  }, [fetchCollection]);
 
   // Deleting a category cascades to everything referencing it.
   const deleteCategory = useCallback(async (categoryId) => {
@@ -116,11 +133,12 @@ export function useContentDB(uid) {
         snap.forEach((d) => batch.delete(d.ref));
       }
       await batch.commit();
+      await Promise.all(["categories", "topics", "persons", "quiz", "flashcards"].map(fetchCollection));
     } catch (e) {
       console.error("category cascade delete failed", e);
       throw e;
     }
-  }, []);
+  }, [fetchCollection]);
 
   // One-time helper for a brand-new Firebase project: writes the starter
   // content set using the SAME ids as the seed data, so categoryId
@@ -137,7 +155,8 @@ export function useContentDB(uid) {
       }
     }
     await batch.commit();
-  }, []);
+    await Promise.all(Object.keys(COLLECTIONS).map(fetchCollection));
+  }, [fetchCollection]);
 
   // Returns the full content set as a plain object, ready to JSON.stringify
   // for a file download. Uses the live in-memory state, not a fresh read.
@@ -173,8 +192,9 @@ export function useContentDB(uid) {
       }
       await batch.commit();
     }
+    await Promise.all(Object.keys(COLLECTIONS).map(fetchCollection));
     return summary;
-  }, []);
+  }, [fetchCollection]);
 
   return { db: db_, loaded, addItem, updateItem, deleteItem, deleteCategory, publishTopic, unpublishTopic, seedStarterContent, exportContent, importContent };
 }
