@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, Sparkles, Shield, Plus, Trash2, Pencil, Lock,
   LogOut, Save, User, Mail, UploadCloud, Download, Upload, Flame, Zap, Share2,
   ExternalLink, Globe, PlayCircle, FileText, Gauge, Maximize2, Minimize2,
+  Target, Map, ListChecks, Network, Star, StickyNote, Printer, RefreshCw, ArrowRight,
 } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import { useProfile, useIsAdmin, useAdminDirectory, DEFAULT_ADMIN_PERMISSIONS, getLevelInfo } from "./hooks/useProfile";
@@ -53,6 +54,12 @@ const FontLoader = () => (
     @media (max-width: 720px) {
       .psy-admin-grid { grid-template-columns: 1fr !important; }
     }
+    .psy-topic-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
+    @media (max-width: 860px) { .psy-topic-grid { grid-template-columns: 1fr; } }
+    .psy-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    @media (max-width: 640px) { .psy-stat-grid { grid-template-columns: repeat(2, 1fr); } }
+    .psy-paradigm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 640px) { .psy-paradigm-grid { grid-template-columns: 1fr; } }
     @media (prefers-reduced-motion: reduce) { .card-flip-inner { transition: none !important; } }
   `}</style>
 );
@@ -914,7 +921,7 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
         </ChipStrip>
       )}
       {selected ? (
-        <TopicDetail topic={selected} cat={catOf(selected.categoryId)} onBack={goBackFromTopic} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} isAdmin={isAdmin} />
+        <TopicDetail topic={selected} cat={catOf(selected.categoryId)} dbData={dbData} onBack={goBackFromTopic} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} isAdmin={isAdmin} />
       ) : filtered.length === 0 ? <EmptyState text="No topics match this search. Try a different keyword or category." /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {filtered.map((topic) => {
@@ -943,16 +950,316 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
   );
 }
 
-function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, isAdmin, publicView = false, onRequireLogin }) {
+/* -------- Topic content-page building blocks -------- */
+const TOPIC_TABS = [
+  { id: "overview", label: "Overview", icon: BookOpen },
+  { id: "keyPoints", label: "Key Points", icon: ListChecks },
+  { id: "conceptMap", label: "Concept Map", icon: Network },
+  { id: "examEssentials", label: "Exam Essentials", icon: Star },
+  { id: "researchLens", label: "Research Lens", icon: FlaskConical },
+  { id: "practice", label: "Practice", icon: ClipboardList },
+];
+
+const DIFFICULTY_FILL = { Beginner: 0.33, Intermediate: 0.66, Advanced: 1 };
+
+function StatCard({ icon: Icon, label, value, tint }) {
+  return (
+    <div style={{ background: `${T.ink}08`, border: `1px solid ${T.ink}18`, borderRadius: 9, padding: "11px 13px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_BODY, fontSize: 11, color: T.inkSoft, marginBottom: 5 }}>
+        <Icon size={13} color={tint} /> {label}
+      </div>
+      <div style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 14, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+      {label === "Difficulty Level" && DIFFICULTY_FILL[value] !== undefined && (
+        <div style={{ marginTop: 6, height: 4, borderRadius: 2, background: `${T.ink}14`, overflow: "hidden" }}>
+          <div style={{ width: `${DIFFICULTY_FILL[value] * 100}%`, height: "100%", background: tint || T.brass }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidePanel({ title, icon: Icon, children, tint }) {
+  return (
+    <div style={{ background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13, color: T.ink, marginBottom: 12 }}>
+        {Icon && <Icon size={15} color={tint || T.brass} />} {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function TopicTabs({ active, onChange }) {
+  return (
+    <div className="psy-scroll" style={{ display: "flex", gap: 4, overflowX: "auto", borderBottom: `1px solid ${T.ink}18`, marginBottom: 20, paddingBottom: 1 }}>
+      {TOPIC_TABS.map((t) => {
+        const Icon = t.icon;
+        const isActive = active === t.id;
+        return (
+          <button key={t.id} onClick={() => onChange(t.id)} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", background: "none", border: "none", borderBottom: `2px solid ${isActive ? T.brass : "transparent"}`, color: isActive ? T.brassLight : T.inkSoft, fontFamily: FONT_BODY, fontWeight: 600, fontSize: 13, padding: "8px 10px", cursor: "pointer" }}>
+            <Icon size={14} /> {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SectionLabel({ icon: Icon, children, tint }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: tint || T.brass, marginBottom: 10 }}>
+      {Icon && <Icon size={13} />} {children}
+    </div>
+  );
+}
+
+function KeyPointsList({ keyPoints, numbered }) {
+  if (!keyPoints.length) return <EmptyState text="No key points added yet." />;
+  return numbered ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {keyPoints.map((kp, i) => (
+        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", background: `${T.brass}18`, color: T.brassLight, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_MONO, fontWeight: 700, fontSize: 11.5 }}>{i + 1}</div>
+          <div style={{ fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.6, color: T.ink, paddingTop: 2 }}>{kp}</div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <ul style={{ margin: 0, paddingLeft: 20, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.9, color: T.ink }}>{keyPoints.map((kp, i) => <li key={i}>{kp}</li>)}</ul>
+  );
+}
+
+function PhenomenaChips({ items }) {
+  if (!items.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {items.map((p, i) => (
+        <span key={i} style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 12.5, color: T.ink, background: `${T.ink}0A`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>{p}</span>
+      ))}
+    </div>
+  );
+}
+
+function ResearcherCard({ person }) {
+  if (!person) return null;
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 14 }}>
+      <div style={{ flexShrink: 0, width: 46, height: 46, borderRadius: "50%", background: `${T.brass}22`, color: T.brassLight, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17 }}>
+        {person.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: T.ink }}>{person.name}</div>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.inkSoft, margin: "2px 0 6px" }}>{person.years}</div>
+        <div style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.55, color: T.inkSoft }}>{person.keyIdea}</div>
+      </div>
+    </div>
+  );
+}
+
+function ParadigmBoard({ stages }) {
+  if (!stages.length) return null;
+  return (
+    <div className="psy-paradigm-grid">
+      {stages.map((s, i) => (
+        <div key={i} style={{ background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 12.5, color: T.brassLight, marginBottom: 8 }}>{s.title}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {s.rows.map((r, j) => <div key={j} style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.ink }}>{r}</div>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExamQuickFacts({ facts }) {
+  if (!facts.length) return <EmptyState text="No exam quick facts added yet." />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {facts.map((f, i) => (
+        <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+          <CheckCircle2 size={15} color={T.sage} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, lineHeight: 1.5, color: T.ink }}>
+            <span style={{ fontWeight: 700 }}>{f.label}:</span> {f.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConceptMapView({ topic, cat, phenomena }) {
+  const spokes = [...topic.keyPoints.slice(0, 4), ...phenomena.slice(0, 4)];
+  if (!spokes.length) return <EmptyState text="Add key points or phenomena to generate a concept map." />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: "#FFFFFF", background: cat.tint || T.brass, borderRadius: 10, padding: "12px 20px", textAlign: "center", boxShadow: `0 6px 16px ${cat.tint || T.brass}44` }}>
+        {topic.name}
+      </div>
+      <ArrowRight size={16} color={T.inkSoft} style={{ transform: "rotate(90deg)", margin: "2px 0" }} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+        {spokes.map((s, i) => (
+          <div key={i} style={{ fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600, color: T.ink, background: `${cat.tint || T.brass}12`, border: `1px solid ${cat.tint || T.brass}44`, borderRadius: 8, padding: "9px 13px", maxWidth: 200, textAlign: "center" }}>
+            {s}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopicPractice({ dbData, categoryId }) {
+  const pool = useMemo(() => dbData.quiz.filter((q) => q.categoryId === categoryId), [dbData.quiz, categoryId]);
+  const cards = useMemo(() => dbData.flashcards.filter((f) => f.categoryId === categoryId).slice(0, 6), [dbData.flashcards, categoryId]);
+  const [questions, setQuestions] = useState(() => [...pool].sort(() => Math.random() - 0.5).slice(0, 5));
+  const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
+  const [flipped, setFlipped] = useState({});
+
+  const restart = () => { setQuestions([...pool].sort(() => Math.random() - 0.5).slice(0, 5)); setIndex(0); setSelected(null); setScore(0); setDone(false); };
+  const pick = (i) => {
+    if (selected !== null) return;
+    setSelected(i);
+    if (i === questions[index].correct) setScore((s) => s + 1);
+  };
+  const next = () => {
+    if (index + 1 < questions.length) { setIndex(index + 1); setSelected(null); }
+    else setDone(true);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <div>
+        <SectionLabel icon={ClipboardList}>Quick practice quiz</SectionLabel>
+        {questions.length === 0 ? <EmptyState text="No quiz questions in this category yet." /> : done ? (
+          <div style={{ background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 18, textAlign: "center" }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, color: T.ink, marginBottom: 6 }}>{score} / {questions.length}</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: T.inkSoft, marginBottom: 14 }}>correct answers</div>
+            <GhostButton onClick={restart}><RefreshCw size={13} /> Try again</GhostButton>
+          </div>
+        ) : (
+          <div style={{ background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.inkSoft, marginBottom: 8 }}>Question {index + 1} of {questions.length}</div>
+            <div style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 14.5, color: T.ink, marginBottom: 14 }}>{questions[index].question}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {questions[index].options.map((opt, i) => {
+                const isCorrect = i === questions[index].correct;
+                const isSelected = i === selected;
+                let border = `${T.ink}22`, bg = "transparent";
+                if (selected !== null) {
+                  if (isCorrect) { border = T.sage; bg = `${T.sage}18`; }
+                  else if (isSelected) { border = T.rust; bg = `${T.rust}12`; }
+                }
+                return (
+                  <button key={i} onClick={() => pick(i)} className="psy-focus" style={{ textAlign: "left", padding: "9px 12px", borderRadius: 8, border: `1px solid ${border}`, background: bg, color: T.ink, fontFamily: FONT_BODY, fontSize: 13.5, cursor: selected === null ? "pointer" : "default" }}>{opt}</button>
+                );
+              })}
+            </div>
+            {selected !== null && (
+              <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft }}>{questions[index].explanation}</div>
+                <PrimaryButton onClick={next}>{index + 1 < questions.length ? "Next" : "Finish"} <ArrowRight size={14} /></PrimaryButton>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {cards.length > 0 && (
+        <div>
+          <SectionLabel icon={BookOpen}>Flashcards</SectionLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+            {cards.map((c) => {
+              const isFlipped = !!flipped[c.id];
+              return (
+                <div key={c.id} className={`card-flip ${isFlipped ? "flipped" : ""}`} style={{ perspective: 1000, height: 120, cursor: "pointer" }} onClick={() => setFlipped((f) => ({ ...f, [c.id]: !f[c.id] }))}>
+                  <div className="card-flip-inner" style={{ position: "relative", width: "100%", height: "100%" }}>
+                    <div className="card-face" style={{ position: "absolute", inset: 0, background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 8, padding: 12, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: FONT_BODY, fontWeight: 600, fontSize: 12.5, color: T.ink }}>{c.front}</div>
+                    <div className="card-face card-back" style={{ position: "absolute", inset: 0, background: `${T.brass}12`, border: `1px solid ${T.brass}44`, borderRadius: 8, padding: 12, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: FONT_BODY, fontSize: 11.5, lineHeight: 1.4, color: T.ink, overflowY: "auto" }}>{c.back}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopicDetail({ topic, cat, dbData, onBack, profile, toggleBookmark, markRead, isAdmin, publicView = false, onRequireLogin }) {
   const [theaterMode, setTheaterMode] = useState(Boolean(topic.videoUrl));
+  const [activeTab, setActiveTab] = useState("overview");
   const isBookmarked = profile.bookmarks.includes(topic.id);
   const isMastered = profile.readTopics.includes(topic.id);
   const resourceLinks = Array.isArray(topic.resourceLinks) ? topic.resourceLinks : [];
+  const phenomena = Array.isArray(topic.phenomena) ? topic.phenomena : [];
+  const curriculum = Array.isArray(topic.curriculum) ? topic.curriculum : [];
+  const academicLevel = Array.isArray(topic.academicLevel) ? topic.academicLevel : [];
+  const paradigm = Array.isArray(topic.paradigm) ? topic.paradigm : [];
+  const examQuickFacts = Array.isArray(topic.examQuickFacts) ? topic.examQuickFacts : [];
+  const researcher = dbData ? dbData.persons.find((p) => p.id === topic.researcherId) : null;
+  const hasStats = topic.difficulty || academicLevel.length || topic.examRelevance || curriculum.length;
+  const rawYouTube = topic.videoUrl && getYouTubeEmbedUrl(topic.videoUrl) ? topic.videoUrl : null;
+
+  const overviewBody = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <SectionLabel icon={FileText}>Description / Summary</SectionLabel>
+        <p style={{ fontFamily: FONT_BODY, fontSize: 14.5, lineHeight: 1.7, margin: 0, color: T.ink }}>{topic.summary}</p>
+      </div>
+      <div>
+        <SectionLabel icon={ListChecks}>Key Points</SectionLabel>
+        <KeyPointsList keyPoints={topic.keyPoints} />
+      </div>
+      {phenomena.length > 0 && (
+        <div>
+          <SectionLabel icon={Sparkles}>Important Phenomena</SectionLabel>
+          <PhenomenaChips items={phenomena} />
+        </div>
+      )}
+      {researcher && (
+        <div>
+          <SectionLabel icon={Users}>Important Researchers</SectionLabel>
+          <ResearcherCard person={researcher} />
+        </div>
+      )}
+      {paradigm.length > 0 && (
+        <div>
+          <SectionLabel icon={Layers}>Basic Paradigm</SectionLabel>
+          <ParadigmBoard stages={paradigm} />
+        </div>
+      )}
+      {examQuickFacts.length > 0 && (
+        <div>
+          <SectionLabel icon={Star}>Exam Essentials (Quick Facts)</SectionLabel>
+          <ExamQuickFacts facts={examQuickFacts} />
+        </div>
+      )}
+    </div>
+  );
+
+  const tabBody = {
+    overview: overviewBody,
+    keyPoints: <div><SectionLabel icon={ListChecks}>Key Points</SectionLabel><KeyPointsList keyPoints={topic.keyPoints} numbered /></div>,
+    conceptMap: <div><SectionLabel icon={Network}>Concept Map</SectionLabel><ConceptMapView topic={topic} cat={cat} phenomena={phenomena} /></div>,
+    examEssentials: <div><SectionLabel icon={Star}>Exam Essentials</SectionLabel><ExamQuickFacts facts={examQuickFacts} /></div>,
+    researchLens: (
+      <div>
+        <SectionLabel icon={FlaskConical}>Research Lens</SectionLabel>
+        {topic.researchLens ? (
+          <p style={{ fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.7, margin: 0, color: T.ink }}>{topic.researchLens}</p>
+        ) : <EmptyState text="No research-lens notes added for this topic yet." />}
+      </div>
+    ),
+    practice: dbData ? <TopicPractice dbData={dbData} categoryId={topic.categoryId} /> : <EmptyState text="Practice isn't available in this preview." />,
+  }[activeTab];
 
   return (
     <div>
       <button onClick={publicView ? onRequireLogin : onBack} className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: T.brassLight, fontFamily: FONT_BODY, fontSize: 13, cursor: "pointer", marginBottom: 16, padding: 0 }}><ChevronLeft size={15} /> {publicView ? "Log in to browse more" : "Back to drawer"}</button>
-      <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 24px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)", width: "100%", maxWidth: theaterMode ? 1080 : 720, transition: "max-width 220ms ease" }}>
+      <div style={{ background: T.paper, borderRadius: 10, padding: "26px 26px 28px", color: T.ink, boxShadow: "0 8px 24px rgba(0,0,0,0.28)", width: "100%", maxWidth: theaterMode ? 1180 : 1080, transition: "max-width 220ms ease" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <CatalogStamp tint={cat.tint}>{cat.name}</CatalogStamp>
           <div style={{ display: "flex", gap: 8 }}>
@@ -970,55 +1277,73 @@ function TopicDetail({ topic, cat, onBack, profile, toggleBookmark, markRead, is
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, margin: "14px 0 4px" }}>{topic.name}</h2>
         <div style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.inkSoft, marginBottom: 18 }}>landmark year — {topic.year}</div>
 
-        {topic.videoUrl && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint }}>
-                <PlayCircle size={13} /> Video
-              </div>
-              <button onClick={() => setTheaterMode((mode) => !mode)} className="psy-focus psy-theater-toggle" style={{ alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${T.ink}22`, borderRadius: 6, padding: "5px 8px", color: T.inkSoft, cursor: "pointer", fontFamily: FONT_BODY, fontSize: 11.5 }} aria-label={theaterMode ? "Exit theatre mode" : "Enter theatre mode"}>
-                {theaterMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />} {theaterMode ? "Exit theatre" : "Theatre mode"}
-              </button>
-            </div>
-            <VideoPlayer url={topic.videoUrl} isAdmin={isAdmin} />
-          </>
-        )}
-
-        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 8 }}>Description</div>
-        <p style={{ fontFamily: FONT_BODY, fontSize: 14.5, lineHeight: 1.7, margin: "0 0 18px" }}>{topic.summary}</p>
-        <ul style={{ margin: "0 0 22px", paddingLeft: 20, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.9 }}>{topic.keyPoints.map((kp, i) => <li key={i}>{kp}</li>)}</ul>
-
-        {resourceLinks.length > 0 && (
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: cat.tint, marginBottom: 10 }}>
-              <FileText size={13} /> Resources
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {resourceLinks.map((r, i) => (
-                <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, textDecoration: "none", background: `${T.ink}0D`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "10px 14px", color: T.ink, fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 600 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}><FileText size={14} color={cat.tint} /> {r.label || r.url}</span>
-                  <ExternalLink size={13} color={T.inkSoft} />
-                </a>
-              ))}
-            </div>
+        {hasStats && (
+          <div className="psy-stat-grid" style={{ marginBottom: 20 }}>
+            {topic.difficulty && <StatCard icon={Gauge} label="Difficulty Level" value={topic.difficulty} tint={cat.tint} />}
+            {academicLevel.length > 0 && <StatCard icon={GraduationCap} label="Academic Level" value={academicLevel.join(" · ")} tint={cat.tint} />}
+            {topic.examRelevance && <StatCard icon={Target} label="Exam Relevance" value={topic.examRelevance} tint={cat.tint} />}
+            {curriculum.length > 0 && <StatCard icon={Map} label="Curriculum Mapping" value={curriculum.join(" · ")} tint={cat.tint} />}
           </div>
         )}
 
-        <div style={{ borderTop: `1px solid ${T.ink}22`, paddingTop: 18 }}>
-          {publicView ? (
-            <PrimaryButton onClick={onRequireLogin}><Lock size={15} /> Log in to continue studying</PrimaryButton>
-          ) : isMastered ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: `${T.sage}22`, border: `1px solid ${T.sage}`, color: "#3D6B5C", borderRadius: 20, padding: "9px 18px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13.5 }}>
-              <CheckCircle2 size={16} /> Mastered
-            </div>
-          ) : (
-            <PrimaryButton onClick={() => markRead(topic.id)}><CheckCircle2 size={15} /> Mark as Mastered</PrimaryButton>
-          )}
+        <TopicTabs active={activeTab} onChange={setActiveTab} />
+
+        <div className="psy-topic-grid">
+          <div style={{ minWidth: 0 }}>{tabBody}</div>
+
+          <div style={{ minWidth: 0 }}>
+            {topic.videoUrl && (
+              <SidePanel title="Video Lecture" icon={PlayCircle} tint={cat.tint}>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button onClick={() => setTheaterMode((m) => !m)} className="psy-focus psy-theater-toggle" style={{ alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${T.ink}22`, borderRadius: 6, padding: "4px 8px", color: T.inkSoft, cursor: "pointer", fontFamily: FONT_BODY, fontSize: 11 }} aria-label={theaterMode ? "Exit theatre mode" : "Enter theatre mode"}>
+                    {theaterMode ? <Minimize2 size={12} /> : <Maximize2 size={12} />} {theaterMode ? "Exit theatre" : "Theatre"}
+                  </button>
+                </div>
+                <VideoPlayer url={topic.videoUrl} isAdmin={isAdmin} />
+                {rawYouTube && (
+                  <a href={rawYouTube} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                    <PrimaryButton style={{ width: "100%", justifyContent: "center" }}><PlayCircle size={14} /> Watch on YouTube</PrimaryButton>
+                  </a>
+                )}
+              </SidePanel>
+            )}
+
+            {resourceLinks.length > 0 && (
+              <SidePanel title="Resource Links" icon={FileText} tint={cat.tint}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {resourceLinks.map((r, i) => (
+                    <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, textDecoration: "none", background: `${T.ink}0D`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "10px 12px", color: T.ink, fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><FileText size={13} color={cat.tint} style={{ flexShrink: 0 }} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label || r.url}</span></span>
+                      <ExternalLink size={12} color={T.inkSoft} style={{ flexShrink: 0 }} />
+                    </a>
+                  ))}
+                </div>
+              </SidePanel>
+            )}
+
+            <SidePanel title="Quick Actions" icon={Zap} tint={cat.tint}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {publicView ? (
+                  <PrimaryButton onClick={onRequireLogin} style={{ width: "100%", justifyContent: "center" }}><Lock size={14} /> Log in to continue</PrimaryButton>
+                ) : isMastered ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: `${T.sage}18`, border: `1px solid ${T.sage}`, color: "#3D6B5C", borderRadius: 8, padding: "9px 14px", fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13 }}>
+                    <CheckCircle2 size={15} /> Mastered
+                  </div>
+                ) : (
+                  <PrimaryButton onClick={() => markRead(topic.id)} style={{ width: "100%", justifyContent: "center" }}><CheckCircle2 size={14} /> Mark as Mastered</PrimaryButton>
+                )}
+                <GhostButton onClick={() => setActiveTab("practice")} style={{ width: "100%", justifyContent: "center" }}><ClipboardList size={13} /> Take Quiz</GhostButton>
+                <GhostButton disabled title="Coming soon" style={{ width: "100%", justifyContent: "center", opacity: 0.55, cursor: "not-allowed" }}><StickyNote size={13} /> Add Note</GhostButton>
+                <GhostButton onClick={() => window.print()} style={{ width: "100%", justifyContent: "center" }}><Printer size={13} /> Download / Print</GhostButton>
+              </div>
+            </SidePanel>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
 
 /* ============================== THEORIES & PERSONS ============================== */
 function Theories({ dbData }) {
@@ -2082,13 +2407,25 @@ function AdminCategories({ dbData, addItem, deleteCategory }) {
 }
 
 function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
-  const blank = { categoryId: dbData.categories[0]?.id || "", name: "", year: "", summary: "", keyPoints: "", videoUrl: "", resourceLinks: "" };
+  const blank = {
+    categoryId: dbData.categories[0]?.id || "", name: "", year: "", summary: "", keyPoints: "", videoUrl: "", resourceLinks: "",
+    difficulty: "", academicLevel: "", examRelevance: "", curriculum: "", phenomena: "", researcherId: "", paradigm: "", examQuickFacts: "", researchLens: "",
+  };
   const { form, setForm, editingId, setEditingId, reset } = useEditableForm(blank);
   const startEdit = (t) => {
     setForm({
       categoryId: t.categoryId, name: t.name, year: t.year, summary: t.summary, keyPoints: t.keyPoints.join("\n"),
       videoUrl: t.videoUrl || "",
       resourceLinks: (t.resourceLinks || []).map((r) => `${r.label || ""} | ${r.url}`).join("\n"),
+      difficulty: t.difficulty || "",
+      academicLevel: (t.academicLevel || []).join(", "),
+      examRelevance: t.examRelevance || "",
+      curriculum: (t.curriculum || []).join(", "),
+      phenomena: (t.phenomena || []).join("\n"),
+      researcherId: t.researcherId || "",
+      paradigm: (t.paradigm || []).map((s) => [s.title, ...s.rows].join("\n")).join("\n\n"),
+      examQuickFacts: (t.examQuickFacts || []).map((f) => `${f.label}: ${f.value}`).join("\n"),
+      researchLens: t.researchLens || "",
     });
     setEditingId(t.id);
   };
@@ -2100,11 +2437,29 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
       const url = urlParts.join("|").trim();
       return url ? { label: label.trim(), url } : { label: "", url: label.trim() };
     }).filter((r) => r.url);
+    const phenomena = form.phenomena.split("\n").map((s) => s.trim()).filter(Boolean);
+    const academicLevel = form.academicLevel.split(",").map((s) => s.trim()).filter(Boolean);
+    const curriculum = form.curriculum.split(",").map((s) => s.trim()).filter(Boolean);
+    const paradigm = form.paradigm.split(/\n\s*\n/).map((block) => block.split("\n").map((l) => l.trim()).filter(Boolean)).filter((rows) => rows.length > 0).map((rows) => ({ title: rows[0], rows: rows.slice(1) }));
+    const examQuickFacts = form.examQuickFacts.split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
+      const idx = line.indexOf(":");
+      if (idx === -1) return null;
+      return { label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
+    }).filter(Boolean);
     const payload = {
       categoryId: form.categoryId, name: form.name.trim(), year: form.year.trim(), summary: form.summary.trim(),
       keyPoints: form.keyPoints.split("\n").map((s) => s.trim()).filter(Boolean),
       videoUrl: form.videoUrl.trim(),
       resourceLinks,
+      difficulty: form.difficulty.trim(),
+      academicLevel,
+      examRelevance: form.examRelevance.trim(),
+      curriculum,
+      phenomena,
+      researcherId: form.researcherId || "",
+      paradigm,
+      examQuickFacts,
+      researchLens: form.researchLens.trim(),
     };
     if (editingId) updateItem("topics", editingId, payload); else addItem("topics", payload);
     reset();
@@ -2119,6 +2474,18 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
         <Field label="Description / Summary"><TextArea value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="2-3 sentence overview" /></Field>
         <Field label="Key points (one per line)"><TextArea value={form.keyPoints} onChange={(e) => setForm({ ...form, keyPoints: e.target.value })} placeholder={"Point one\nPoint two"} /></Field>
         <Field label="Resource links (optional — one per line, format: Label | URL)"><TextArea value={form.resourceLinks} onChange={(e) => setForm({ ...form, resourceLinks: e.target.value })} placeholder={"Lecture slides | https://...\nOriginal paper | https://..."} /></Field>
+        <div style={{ borderTop: `1px solid ${T.bgPanelLight}`, margin: "16px 0 14px", paddingTop: 14 }}>
+          <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 700, color: T.brass, marginBottom: 10 }}>Topic content page (optional)</div>
+        </div>
+        <Field label="Difficulty level (e.g. Beginner / Intermediate / Advanced)"><TextInput value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })} placeholder="Intermediate" /></Field>
+        <Field label="Academic level (comma-separated)"><TextInput value={form.academicLevel} onChange={(e) => setForm({ ...form, academicLevel: e.target.value })} placeholder="UG, PG" /></Field>
+        <Field label="Exam relevance (e.g. Low / Medium / High)"><TextInput value={form.examRelevance} onChange={(e) => setForm({ ...form, examRelevance: e.target.value })} placeholder="High" /></Field>
+        <Field label="Curriculum mapping (comma-separated)"><TextInput value={form.curriculum} onChange={(e) => setForm({ ...form, curriculum: e.target.value })} placeholder="NET, SET, MSc, UG" /></Field>
+        <Field label="Important phenomena (one per line)"><TextArea value={form.phenomena} onChange={(e) => setForm({ ...form, phenomena: e.target.value })} placeholder={"Acquisition\nExtinction\nSpontaneous Recovery"} /></Field>
+        <Field label="Important researcher"><Select value={form.researcherId} onChange={(e) => setForm({ ...form, researcherId: e.target.value })}><option value="">— none —</option>{dbData.persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+        <Field label="Basic paradigm (blank line between stages; first line of each is the stage title)"><TextArea value={form.paradigm} onChange={(e) => setForm({ ...form, paradigm: e.target.value })} placeholder={"Before Conditioning\nUCS → UCR\nNS → No response\n\nDuring Conditioning\nNS + UCS → UCR\n\nAfter Conditioning\nCS → CR"} style={{ minHeight: 120 }} /></Field>
+        <Field label="Exam quick facts (one per line, format: Label: Value)"><TextArea value={form.examQuickFacts} onChange={(e) => setForm({ ...form, examQuickFacts: e.target.value })} placeholder={"Founder/Key Researcher: Ivan Pavlov\nType of Learning: Associative Learning"} /></Field>
+        <Field label="Research lens notes (optional)"><TextArea value={form.researchLens} onChange={(e) => setForm({ ...form, researchLens: e.target.value })} placeholder="How this topic is studied / researched, methodological notes, etc." /></Field>
         <div style={{ display: "flex", gap: 8 }}><PrimaryButton type="submit">{editingId ? <><Save size={14} /> Save</> : <><Plus size={14} /> Add topic</>}</PrimaryButton>{editingId && <GhostButton onClick={reset}>Cancel</GhostButton>}</div>
       </form>
     } list={dbData.topics.map((t) => {
