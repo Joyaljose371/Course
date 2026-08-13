@@ -43,6 +43,11 @@ function normalizeItems(listKey, rawItems) {
   return items;
 }
 
+// publicTopics is the one collection readable without auth (see
+// firestore.rules) — it powers the logged-out shared-link preview, so it's
+// fetched unconditionally. Everything else requires a signed-in user.
+const PUBLIC_COLLECTIONS = ["publicTopics"];
+
 export function useContentDB(uid) {
   const [db_, setDb] = useState(EMPTY_DB);
   const [loadedFlags, setLoadedFlags] = useState({});
@@ -70,14 +75,33 @@ export function useContentDB(uid) {
     }
   }, []);
 
+  // publicTopics loads once, regardless of auth state.
   useEffect(() => {
-    if (!uid) { setDb(EMPTY_DB); setLoadedFlags({}); return; }
-    setDb(EMPTY_DB);
-    setLoadedFlags({});
-    Object.keys(COLLECTIONS).forEach((listKey) => fetchCollection(listKey));
+    fetchCollection("publicTopics");
+  }, [fetchCollection]);
+
+  // Everything else needs a signed-in user (per firestore.rules).
+  useEffect(() => {
+    const authCollections = Object.keys(COLLECTIONS).filter((k) => !PUBLIC_COLLECTIONS.includes(k));
+    if (!uid) {
+      setDb((prev) => ({ ...EMPTY_DB, publicTopics: prev.publicTopics }));
+      setLoadedFlags((prev) => {
+        const next = {};
+        authCollections.forEach((k) => { next[k] = false; });
+        if (prev.publicTopics) next.publicTopics = true;
+        return next;
+      });
+      return;
+    }
+    authCollections.forEach((listKey) => fetchCollection(listKey));
   }, [uid, fetchCollection]);
 
-  const loaded = Object.keys(COLLECTIONS).every((k) => loadedFlags[k]);
+  // Logged-out visitors only ever get publicTopics (the rest require auth
+  // and are never fetched — see the effect above), so "loaded" for them
+  // means just that one collection, not all ten.
+  const loaded = uid
+    ? Object.keys(COLLECTIONS).every((k) => loadedFlags[k])
+    : Boolean(loadedFlags.publicTopics);
 
   const addItem = useCallback(async (listKey, item) => {
     const { id, ...rest } = item; // Firestore assigns its own id
