@@ -293,6 +293,7 @@ function Nav({ active, setActive, isAdmin }) {
     { id: "flashcards", label: NAV_LABELS.flashcards, icon: BookOpen },
     ...(isAdmin ? [{ id: "admin", label: NAV_LABELS.admin, icon: Shield }] : []),
   ];
+  const researchHelperUrl = import.meta.env.VITE_RESEARCH_HELPER_URL;
   return (
     <nav style={{ display: "flex", gap: 4, overflowX: "auto", padding: "10px 20px", background: T.bgPanel, borderBottom: `1px solid ${T.bgPanelLight}` }} className="psy-scroll">
       {items.map((item) => {
@@ -304,6 +305,11 @@ function Nav({ active, setActive, isAdmin }) {
           </button>
         );
       })}
+      {researchHelperUrl && (
+        <a href={researchHelperUrl} target="_blank" rel="noopener noreferrer" className="psy-focus" style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 20, border: `1px solid ${T.bgPanelLight}`, cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", color: T.textLight, background: "transparent", textDecoration: "none", marginLeft: 4 }}>
+            <FlaskConical size={15} />Research Helper<ExternalLink size={12} style={{ opacity: 0.6 }} />
+        </a>
+      )}
     </nav>
   );
 }
