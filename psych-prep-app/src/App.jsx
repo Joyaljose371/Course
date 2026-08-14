@@ -66,7 +66,7 @@ const FontLoader = () => (
 
 /* ============================== SHARED UI BITS ============================== */
 const CatalogStamp = ({ children, tint, style }) => (
-  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, background: `${tint || T.brass}15`, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap", ...style }}>{children}</span>
+  <span style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "top", fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: T.ink, background: `${tint || T.brass}15`, border: `1px solid ${tint || T.brass}66`, borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap", ...style }}>{children}</span>
 );
 const PunchHole = () => (
   <div style={{ position: "absolute", top: 10, left: 10, width: 10, height: 10, borderRadius: "50%", background: T.paperDark, boxShadow: `inset 0 0 0 1px ${T.ink}22` }} />
@@ -907,6 +907,36 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
   }).sort((a, b) => a.year.localeCompare(b.year)), [dbData.topics, filterCat, query]);
   const catOf = (id) => dbData.categories.find((c) => c.id === id) || { name: id, tint: T.brass };
 
+  // When browsing "all", group topics into a sub-category section per
+  // category (in category order) instead of one undifferentiated grid.
+  const groups = useMemo(() => {
+    if (filterCat !== "all") return [{ cat: catOf(filterCat), topics: filtered }];
+    return dbData.categories
+      .map((c) => ({ cat: c, topics: filtered.filter((t) => t.categoryId === c.id) }))
+      .filter((g) => g.topics.length > 0);
+  }, [filterCat, filtered, dbData.categories]);
+
+  const renderTopicCard = (topic) => {
+    const cat = catOf(topic.categoryId);
+    const isRead = profile.readTopics.includes(topic.id);
+    const isBookmarked = profile.bookmarks.includes(topic.id);
+    return (
+      <IndexCard key={topic.id} tint={cat.tint} onClick={() => setSelected(topic)}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+            <CatalogStamp tint={cat.tint} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>{cat.name}</CatalogStamp>
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); toggleBookmark(topic.id); }} className="psy-focus" style={{ flex: "0 0 28px", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: 2, color: isBookmarked ? T.brass : T.inkSoft }} aria-label="bookmark">
+            {isBookmarked ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+          </button>
+        </div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16.5, marginTop: 10, lineHeight: 1.3 }}>{topic.name}</div>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.inkSoft, marginTop: 6 }}>landmark year — {topic.year}</div>
+        {isRead && <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 10, fontFamily: FONT_BODY, fontSize: 11.5, color: T.sage }}><CheckCircle2 size={13} /> reviewed</div>}
+      </IndexCard>
+    );
+  };
+
   return (
     <div>
       <SectionHeading eyebrow="Drawer Index" title="Browse topics" right={
@@ -922,28 +952,25 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
       )}
       {selected ? (
         <TopicDetail topic={selected} cat={catOf(selected.categoryId)} dbData={dbData} onBack={goBackFromTopic} profile={profile} toggleBookmark={toggleBookmark} markRead={markRead} isAdmin={isAdmin} />
-      ) : filtered.length === 0 ? <EmptyState text="No topics match this search. Try a different keyword or category." /> : (
+      ) : filtered.length === 0 ? <EmptyState text="No topics match this search. Try a different keyword or category." /> : filterCat === "all" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
+          {groups.map((g) => (
+            <div key={g.cat.id || g.cat.name}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: g.cat.tint || T.brass, flexShrink: 0 }} />
+                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, color: T.textLight }}>{g.cat.name}</div>
+                <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.textMuted }}>{g.topics.length} sub-topic{g.topics.length === 1 ? "" : "s"}</div>
+                <div style={{ flex: 1, height: 1, background: T.bgPanelLight }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+                {g.topics.map(renderTopicCard)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-          {filtered.map((topic) => {
-            const cat = catOf(topic.categoryId);
-            const isRead = profile.readTopics.includes(topic.id);
-            const isBookmarked = profile.bookmarks.includes(topic.id);
-            return (
-              <IndexCard key={topic.id} tint={cat.tint} onClick={() => setSelected(topic)}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0 }}>
-                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                    <CatalogStamp tint={cat.tint} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>{cat.name}</CatalogStamp>
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); toggleBookmark(topic.id); }} className="psy-focus" style={{ flex: "0 0 28px", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: 2, color: isBookmarked ? T.brass : T.inkSoft }} aria-label="bookmark">
-                    {isBookmarked ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
-                  </button>
-                </div>
-                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16.5, marginTop: 10, lineHeight: 1.3 }}>{topic.name}</div>
-                <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.inkSoft, marginTop: 6 }}>landmark year — {topic.year}</div>
-                {isRead && <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 10, fontFamily: FONT_BODY, fontSize: 11.5, color: T.sage }}><CheckCircle2 size={13} /> reviewed</div>}
-              </IndexCard>
-            );
-          })}
+          {filtered.map(renderTopicCard)}
         </div>
       )}
     </div>
@@ -1108,15 +1135,31 @@ function ConceptMapView({ topic, cat, phenomena }) {
   );
 }
 
-function TopicPractice({ dbData, categoryId }) {
-  const pool = useMemo(() => dbData.quiz.filter((q) => q.categoryId === categoryId), [dbData.quiz, categoryId]);
-  const cards = useMemo(() => dbData.flashcards.filter((f) => f.categoryId === categoryId).slice(0, 6), [dbData.flashcards, categoryId]);
+function TopicPractice({ dbData, categoryId, topicId }) {
+  const topicQuiz = useMemo(() => dbData.quiz.filter((q) => q.categoryId === categoryId && q.topicId === topicId), [dbData.quiz, categoryId, topicId]);
+  const categoryQuiz = useMemo(() => dbData.quiz.filter((q) => q.categoryId === categoryId), [dbData.quiz, categoryId]);
+  const usingTopicQuiz = topicQuiz.length > 0;
+  const pool = usingTopicQuiz ? topicQuiz : categoryQuiz;
+
+  const topicCards = useMemo(() => dbData.flashcards.filter((f) => f.categoryId === categoryId && f.topicId === topicId), [dbData.flashcards, categoryId, topicId]);
+  const categoryCards = useMemo(() => dbData.flashcards.filter((f) => f.categoryId === categoryId), [dbData.flashcards, categoryId]);
+  const usingTopicCards = topicCards.length > 0;
+  const cards = (usingTopicCards ? topicCards : categoryCards).slice(0, 6);
+
   const [questions, setQuestions] = useState(() => [...pool].sort(() => Math.random() - 0.5).slice(0, 5));
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
   const [flipped, setFlipped] = useState({});
+
+  // Re-roll the question set whenever the underlying pool changes (e.g. the
+  // learner opens a different topic).
+  useEffect(() => {
+    setQuestions([...pool].sort(() => Math.random() - 0.5).slice(0, 5));
+    setIndex(0); setSelected(null); setScore(0); setDone(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryId, topicId, pool.length]);
 
   const restart = () => { setQuestions([...pool].sort(() => Math.random() - 0.5).slice(0, 5)); setIndex(0); setSelected(null); setScore(0); setDone(false); };
   const pick = (i) => {
@@ -1132,7 +1175,10 @@ function TopicPractice({ dbData, categoryId }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
       <div>
-        <SectionLabel icon={ClipboardList}>Quick practice quiz</SectionLabel>
+        <SectionLabel icon={ClipboardList}>{usingTopicQuiz ? "Quick practice quiz — this topic" : "Quick practice quiz"}</SectionLabel>
+        {!usingTopicQuiz && categoryQuiz.length > 0 && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 12, color: T.inkSoft, marginBottom: 10 }}>No topic-specific questions yet — showing questions from the wider category.</div>
+        )}
         {questions.length === 0 ? <EmptyState text="No quiz questions in this category yet." /> : done ? (
           <div style={{ background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 18, textAlign: "center" }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, color: T.ink, marginBottom: 6 }}>{score} / {questions.length}</div>
@@ -1168,7 +1214,7 @@ function TopicPractice({ dbData, categoryId }) {
       </div>
       {cards.length > 0 && (
         <div>
-          <SectionLabel icon={BookOpen}>Flashcards</SectionLabel>
+          <SectionLabel icon={BookOpen}>{usingTopicCards ? "Flashcards — this topic" : "Flashcards"}</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
             {cards.map((c) => {
               const isFlipped = !!flipped[c.id];
@@ -1253,7 +1299,7 @@ function TopicDetail({ topic, cat, dbData, onBack, profile, toggleBookmark, mark
         ) : <EmptyState text="No research-lens notes added for this topic yet." />}
       </div>
     ),
-    practice: dbData ? <TopicPractice dbData={dbData} categoryId={topic.categoryId} /> : <EmptyState text="Practice isn't available in this preview." />,
+    practice: dbData ? <TopicPractice dbData={dbData} categoryId={topic.categoryId} topicId={topic.id} /> : <EmptyState text="Practice isn't available in this preview." />,
   }[activeTab];
 
   return (
@@ -1371,7 +1417,7 @@ function Theories({ dbData }) {
                   <div className="card-face" style={{ position: "absolute", inset: 0 }}>
                     <IndexCard tint={cat.tint} style={{ height: "100%" }}>
                       <CatalogStamp tint={cat.tint}>{p.field}</CatalogStamp>
-                      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginTop: 12 }}>{p.name}</div>
+                      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, marginTop: 12, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.name}</div>
                       <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, color: T.inkSoft, marginTop: 6 }}>{p.years}</div>
                       <div style={{ position: "absolute", bottom: 12, right: 16, fontFamily: FONT_BODY, fontSize: 10.5, color: T.inkSoft }}>flip →</div>
                     </IndexCard>
@@ -1470,14 +1516,19 @@ function ResearchMethodology({ dbData }) {
 function Quiz({ dbData, addQuizResult }) {
   const [phase, setPhase] = useState("setup");
   const [category, setCategory] = useState("all");
+  const [topic, setTopic] = useState("all");
   const [questions, setQuestions] = useState([]);
   const [index, setIndex] = useState(0);
   const [selectedOpt, setSelectedOpt] = useState(null);
   const [answers, setAnswers] = useState([]);
   const catOf = (id) => dbData.categories.find((c) => c.id === id) || { name: id, tint: T.brass };
+  const topicsInCategory = category === "all" ? [] : dbData.topics.filter((t) => t.categoryId === category);
+
+  const setCategoryAndResetTopic = (c) => { setCategory(c); setTopic("all"); };
+
+  const pool = dbData.quiz.filter((q) => (category === "all" || q.categoryId === category) && (topic === "all" || q.topicId === topic));
 
   const startQuiz = () => {
-    const pool = dbData.quiz.filter((q) => category === "all" || q.categoryId === category);
     setQuestions([...pool].sort(() => Math.random() - 0.5)); setIndex(0); setAnswers([]); setSelectedOpt(null); setPhase("active");
   };
   const selectOption = (i) => {
@@ -1489,7 +1540,7 @@ function Quiz({ dbData, addQuizResult }) {
     if (index + 1 < questions.length) { setIndex(index + 1); setSelectedOpt(null); }
     else {
       const score = answers.filter((a) => a.correct).length;
-      addQuizResult({ date: new Date().toISOString(), categoryId: category, score, total: questions.length });
+      addQuizResult({ date: new Date().toISOString(), categoryId: category, topicId: topic === "all" ? "" : topic, score, total: questions.length });
       setPhase("result");
     }
   };
@@ -1518,14 +1569,23 @@ function Quiz({ dbData, addQuizResult }) {
         </div>
         <div style={{ background: `${T.ink}08`, border: `1px solid ${T.ink}16`, borderRadius: 8, padding: "14px 16px 4px", marginBottom: 20 }}>
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: T.ink, marginBottom: 10, fontWeight: 700 }}>Choose a category</div>
-          <ChipStrip style={{ marginBottom: 10 }}>
-            <FilterChip label="All categories" active={category === "all"} onClick={() => setCategory("all")} />
-            {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={category === c.id} onClick={() => setCategory(c.id)} />)}
+          <ChipStrip style={{ marginBottom: topicsInCategory.length > 0 ? 4 : 10 }}>
+            <FilterChip label="All categories" active={category === "all"} onClick={() => setCategoryAndResetTopic("all")} />
+            {dbData.categories.map((c) => <FilterChip key={c.id} label={c.name} tint={c.tint} active={category === c.id} onClick={() => setCategoryAndResetTopic(c.id)} />)}
           </ChipStrip>
+          {topicsInCategory.length > 0 && (
+            <>
+              <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft, margin: "10px 0 8px" }}>Narrow to a sub-category (optional)</div>
+              <ChipStrip style={{ marginBottom: 10 }}>
+                <FilterChip label="All topics in this category" active={topic === "all"} onClick={() => setTopic("all")} tint={catOf(category).tint} />
+                {topicsInCategory.map((t) => <FilterChip key={t.id} label={t.name} tint={catOf(category).tint} active={topic === t.id} onClick={() => setTopic(t.id)} />)}
+              </ChipStrip>
+            </>
+          )}
         </div>
-        {dbData.quiz.filter((q) => category === "all" || q.categoryId === category).length === 0 ? <EmptyState text="No quiz questions in this category yet." /> : (
+        {pool.length === 0 ? <EmptyState text={topic !== "all" ? "No quiz questions tagged to this topic yet — try 'All topics in this category'." : "No quiz questions in this category yet."} /> : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft }}>{dbData.quiz.filter((q) => category === "all" || q.categoryId === category).length} questions in this set</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: T.inkSoft }}>{pool.length} questions in this set</div>
             <PrimaryButton onClick={startQuiz}>Start quiz <ChevronRight size={15} /></PrimaryButton>
           </div>
         )}
@@ -2538,10 +2598,11 @@ function AdminPersons({ dbData, addItem, updateItem, deleteItem }) {
 }
 
 function AdminQuiz({ dbData, addItem, updateItem, deleteItem }) {
-  const blank = { categoryId: dbData.categories[0]?.id || "", scenario: "", question: "", opt0: "", opt1: "", opt2: "", opt3: "", correct: "0", explanation: "" };
+  const blank = { categoryId: dbData.categories[0]?.id || "", topicId: "", scenario: "", question: "", opt0: "", opt1: "", opt2: "", opt3: "", correct: "0", explanation: "" };
   const { form, setForm, editingId, setEditingId, reset } = useEditableForm(blank);
-  const startEdit = (q) => { setForm({ categoryId: q.categoryId, scenario: q.scenario || "", question: q.question, opt0: q.options[0] || "", opt1: q.options[1] || "", opt2: q.options[2] || "", opt3: q.options[3] || "", correct: String(q.correct), explanation: q.explanation }); setEditingId(q.id); };
+  const startEdit = (q) => { setForm({ categoryId: q.categoryId, topicId: q.topicId || "", scenario: q.scenario || "", question: q.question, opt0: q.options[0] || "", opt1: q.options[1] || "", opt2: q.options[2] || "", opt3: q.options[3] || "", correct: String(q.correct), explanation: q.explanation }); setEditingId(q.id); };
   const fillTrueFalse = () => setForm({ ...form, opt0: "True", opt1: "False", opt2: "", opt3: "" });
+  const topicsInCategory = dbData.topics.filter((t) => t.categoryId === form.categoryId);
   const submit = (e) => {
     e.preventDefault();
     if (!form.question.trim() || !form.opt0.trim() || !form.opt1.trim()) return;
@@ -2549,14 +2610,15 @@ function AdminQuiz({ dbData, addItem, updateItem, deleteItem }) {
     const correctText = rawOpts[parseInt(form.correct, 10)]?.trim() || "";
     const options = rawOpts.map((s) => s.trim()).filter(Boolean);
     const correct = correctText ? options.indexOf(correctText) : 0;
-    const payload = { categoryId: form.categoryId, scenario: form.scenario.trim(), question: form.question.trim(), options, correct: correct === -1 ? 0 : correct, explanation: form.explanation.trim() };
+    const payload = { categoryId: form.categoryId, topicId: form.topicId || "", scenario: form.scenario.trim(), question: form.question.trim(), options, correct: correct === -1 ? 0 : correct, explanation: form.explanation.trim() };
     if (editingId) updateItem("quiz", editingId, payload); else addItem("quiz", payload);
     reset();
   };
   return (
     <AdminShell formTitle={editingId ? "Edit question" : "Add a quiz question"} form={
       <form onSubmit={submit}>
-        <Field label="Category"><Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>{dbData.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+        <Field label="Category"><Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value, topicId: "" })}>{dbData.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+        <Field label="Topic / sub-category (optional — leave blank to apply to the whole category)"><Select value={form.topicId} onChange={(e) => setForm({ ...form, topicId: e.target.value })}><option value="">— whole category —</option>{topicsInCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
         <Field label="Scenario (optional — for case-based / scenario-analysis questions)"><TextArea value={form.scenario} onChange={(e) => setForm({ ...form, scenario: e.target.value })} placeholder="Leave blank for a plain question" /></Field>
         <Field label="Question"><TextArea value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="Type the question" /></Field>
         <div style={{ marginBottom: 10 }}><GhostButton onClick={fillTrueFalse}>Quick-fill True / False</GhostButton></div>
@@ -2570,12 +2632,14 @@ function AdminQuiz({ dbData, addItem, updateItem, deleteItem }) {
       </form>
     } list={dbData.quiz.map((q) => {
       const cat = dbData.categories.find((c) => c.id === q.categoryId);
+      const topic = q.topicId ? dbData.topics.find((t) => t.id === q.topicId) : null;
       return (
         <div key={q.id} style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 8, padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
             <div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <CatalogStamp tint={cat?.tint}>{cat?.name || "—"}</CatalogStamp>
+                {topic && <CatalogStamp tint={T.brass}>{topic.name}</CatalogStamp>}
                 {q.scenario && <CatalogStamp tint={T.rust}>scenario</CatalogStamp>}
                 {q.options?.length === 2 && <CatalogStamp tint={T.sage}>true/false</CatalogStamp>}
               </div>
@@ -2590,30 +2654,39 @@ function AdminQuiz({ dbData, addItem, updateItem, deleteItem }) {
 }
 
 function AdminFlashcards({ dbData, addItem, updateItem, deleteItem }) {
-  const blank = { categoryId: dbData.categories[0]?.id || "", front: "", back: "" };
+  const blank = { categoryId: dbData.categories[0]?.id || "", topicId: "", front: "", back: "" };
   const { form, setForm, editingId, setEditingId, reset } = useEditableForm(blank);
-  const startEdit = (c) => { setForm({ categoryId: c.categoryId, front: c.front, back: c.back }); setEditingId(c.id); };
+  const startEdit = (c) => { setForm({ categoryId: c.categoryId, topicId: c.topicId || "", front: c.front, back: c.back }); setEditingId(c.id); };
+  const topicsInCategory = dbData.topics.filter((t) => t.categoryId === form.categoryId);
   const submit = (e) => {
     e.preventDefault();
     if (!form.front.trim() || !form.back.trim()) return;
-    const payload = { categoryId: form.categoryId, front: form.front.trim(), back: form.back.trim() };
+    const payload = { categoryId: form.categoryId, topicId: form.topicId || "", front: form.front.trim(), back: form.back.trim() };
     if (editingId) updateItem("flashcards", editingId, payload); else addItem("flashcards", payload);
     reset();
   };
   return (
     <AdminShell formTitle={editingId ? "Edit flashcard" : "Add a flashcard"} form={
       <form onSubmit={submit}>
-        <Field label="Category"><Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>{dbData.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+        <Field label="Category"><Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value, topicId: "" })}>{dbData.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+        <Field label="Topic / sub-category (optional — leave blank to apply to the whole category)"><Select value={form.topicId} onChange={(e) => setForm({ ...form, topicId: e.target.value })}><option value="">— whole category —</option>{topicsInCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
         <Field label="Front (term / prompt)"><TextInput value={form.front} onChange={(e) => setForm({ ...form, front: e.target.value })} placeholder="e.g. Zone of Proximal Development" /></Field>
         <Field label="Back (definition)"><TextArea value={form.back} onChange={(e) => setForm({ ...form, back: e.target.value })} placeholder="Definition or explanation" /></Field>
         <div style={{ display: "flex", gap: 8 }}><PrimaryButton type="submit">{editingId ? <><Save size={14} /> Save</> : <><Plus size={14} /> Add flashcard</>}</PrimaryButton>{editingId && <GhostButton onClick={reset}>Cancel</GhostButton>}</div>
       </form>
     } list={dbData.flashcards.map((c) => {
       const cat = dbData.categories.find((cc) => cc.id === c.categoryId);
+      const topic = c.topicId ? dbData.topics.find((t) => t.id === c.topicId) : null;
       return (
         <div key={c.id} style={{ background: T.bgPanel, border: `1px solid ${T.bgPanelLight}`, borderRadius: 8, padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-            <div><CatalogStamp tint={cat?.tint}>{cat?.name || "—"}</CatalogStamp><div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight, marginTop: 6 }}>{c.front}</div></div>
+            <div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <CatalogStamp tint={cat?.tint}>{cat?.name || "—"}</CatalogStamp>
+                {topic && <CatalogStamp tint={T.brass}>{topic.name}</CatalogStamp>}
+              </div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: T.textLight, marginTop: 6 }}>{c.front}</div>
+            </div>
             <div style={{ display: "flex", gap: 6 }}><GhostButton onClick={() => startEdit(c)}><Pencil size={13} /> Edit</GhostButton><GhostButton danger onClick={() => { if (confirm("Delete this flashcard?")) deleteItem("flashcards", c.id); }}><Trash2 size={13} /></GhostButton></div>
           </div>
         </div>
