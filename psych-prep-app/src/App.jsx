@@ -915,11 +915,19 @@ function Browse({ dbData, profile, toggleBookmark, markRead, filterCat, setFilte
 
   // When browsing "all", group topics into a sub-category section per
   // category (in category order) instead of one undifferentiated grid.
+  // A topic whose categoryId doesn't match any known category (e.g. an
+  // import referencing a category that doesn't exist in this project)
+  // still needs to show up somewhere, so it falls into an "Uncategorized"
+  // group rather than being silently dropped.
   const groups = useMemo(() => {
     if (filterCat !== "all") return [{ cat: catOf(filterCat), topics: filtered }];
-    return dbData.categories
+    const known = dbData.categories
       .map((c) => ({ cat: c, topics: filtered.filter((t) => t.categoryId === c.id) }))
       .filter((g) => g.topics.length > 0);
+    const knownIds = new Set(dbData.categories.map((c) => c.id));
+    const orphaned = filtered.filter((t) => !knownIds.has(t.categoryId));
+    if (orphaned.length > 0) known.push({ cat: { id: "__uncategorized", name: "Uncategorized", tint: T.textMuted }, topics: orphaned });
+    return known;
   }, [filterCat, filtered, dbData.categories]);
 
   const renderTopicCard = (topic) => {
@@ -1046,19 +1054,29 @@ function SectionLabel({ icon: Icon, children, tint }) {
   );
 }
 
+// Generic guard for list items that are normally plain strings but might
+// come through as objects from an inconsistent import (mirrors the same
+// issue seen with references) — never let a raw object hit JSX as a child.
+function toDisplayText(v) {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") return Object.values(v).filter(Boolean).join(", ");
+  return v == null ? "" : String(v);
+}
+
 function KeyPointsList({ keyPoints, numbered }) {
-  if (!keyPoints.length) return <EmptyState text="No key points added yet." />;
+  const items = Array.isArray(keyPoints) ? keyPoints : [];
+  if (!items.length) return <EmptyState text="No key points added yet." />;
   return numbered ? (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {keyPoints.map((kp, i) => (
+      {items.map((kp, i) => (
         <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
           <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", background: `${T.brass}18`, color: T.brassLight, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_MONO, fontWeight: 700, fontSize: 11.5 }}>{i + 1}</div>
-          <div style={{ fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.6, color: T.ink, paddingTop: 2 }}>{kp}</div>
+          <div style={{ fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.6, color: T.ink, paddingTop: 2 }}>{toDisplayText(kp)}</div>
         </div>
       ))}
     </div>
   ) : (
-    <ul style={{ margin: 0, paddingLeft: 20, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.9, color: T.ink }}>{keyPoints.map((kp, i) => <li key={i}>{kp}</li>)}</ul>
+    <ul style={{ margin: 0, paddingLeft: 20, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.9, color: T.ink }}>{items.map((kp, i) => <li key={i}>{toDisplayText(kp)}</li>)}</ul>
   );
 }
 
@@ -1067,7 +1085,7 @@ function PhenomenaChips({ items }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {items.map((p, i) => (
-        <span key={i} style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 12.5, color: T.ink, background: `${T.ink}0A`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>{p}</span>
+        <span key={i} style={{ fontFamily: FONT_BODY, fontWeight: 600, fontSize: 12.5, color: T.ink, background: `${T.ink}0A`, border: `1px solid ${T.ink}22`, borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>{toDisplayText(p)}</span>
       ))}
     </div>
   );
@@ -1097,7 +1115,7 @@ function ParadigmBoard({ stages }) {
         <div key={i} style={{ background: `${T.ink}05`, border: `1px solid ${T.ink}18`, borderRadius: 10, padding: 14 }}>
           <div style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 12.5, color: T.brassLight, marginBottom: 8 }}>{s.title}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {s.rows.map((r, j) => <div key={j} style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.ink }}>{r}</div>)}
+            {(s.rows || []).map((r, j) => <div key={j} style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.ink }}>{r}</div>)}
           </div>
         </div>
       ))}
@@ -1121,8 +1139,38 @@ function ExamQuickFacts({ facts }) {
   );
 }
 
+// References may be plain strings, or structured objects like
+// { author, title, year, ... } depending on the source data — normalize
+// either shape into a single readable citation line.
+function formatReference(r) {
+  if (typeof r === "string") return r;
+  if (r && typeof r === "object") {
+    const parts = [];
+    if (r.author) parts.push(String(r.author).trim());
+    if (r.year) parts.push(`(${r.year})`);
+    if (r.title) parts.push(String(r.title).trim());
+    if (r.source || r.journal) parts.push(String(r.source || r.journal).trim());
+    if (parts.length) return parts.join(" ").replace(/\s+/g, " ").trim();
+    // Unrecognized object shape — fall back to a readable dump rather than crash.
+    return Object.values(r).filter(Boolean).join(", ");
+  }
+  return r == null ? "" : String(r);
+}
+
+function ReferencesList({ references }) {
+  if (!references.length) return null;
+  return (
+    <ol style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+      {references.map((r, i) => (
+        <li key={i} style={{ fontFamily: FONT_BODY, fontSize: 13, lineHeight: 1.55, color: T.inkSoft }}>{formatReference(r)}</li>
+      ))}
+    </ol>
+  );
+}
+
 function ConceptMapView({ topic, cat, phenomena }) {
-  const spokes = [...topic.keyPoints.slice(0, 4), ...phenomena.slice(0, 4)];
+  const keyPoints = Array.isArray(topic.keyPoints) ? topic.keyPoints : [];
+  const spokes = [...keyPoints.slice(0, 4), ...phenomena.slice(0, 4)];
   if (!spokes.length) return <EmptyState text="Add key points or phenomena to generate a concept map." />;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -1251,6 +1299,7 @@ function TopicDetail({ topic, cat, dbData, onBack, profile, toggleBookmark, mark
   const academicLevel = Array.isArray(topic.academicLevel) ? topic.academicLevel : [];
   const paradigm = Array.isArray(topic.paradigm) ? topic.paradigm : [];
   const examQuickFacts = Array.isArray(topic.examQuickFacts) ? topic.examQuickFacts : [];
+  const references = Array.isArray(topic.references) ? topic.references : [];
   const researcher = dbData ? dbData.persons.find((p) => p.id === topic.researcherId) : null;
   const hasStats = topic.difficulty || academicLevel.length || topic.examRelevance || curriculum.length;
   const rawYouTube = topic.videoUrl && getYouTubeEmbedUrl(topic.videoUrl) ? topic.videoUrl : null;
@@ -1289,6 +1338,12 @@ function TopicDetail({ topic, cat, dbData, onBack, profile, toggleBookmark, mark
           <ExamQuickFacts facts={examQuickFacts} />
         </div>
       )}
+      {references.length > 0 && (
+        <div>
+          <SectionLabel icon={BookOpen}>References</SectionLabel>
+          <ReferencesList references={references} />
+        </div>
+      )}
     </div>
   );
 
@@ -1298,11 +1353,17 @@ function TopicDetail({ topic, cat, dbData, onBack, profile, toggleBookmark, mark
     conceptMap: <div><SectionLabel icon={Network}>Concept Map</SectionLabel><ConceptMapView topic={topic} cat={cat} phenomena={phenomena} /></div>,
     examEssentials: <div><SectionLabel icon={Star}>Exam Essentials</SectionLabel><ExamQuickFacts facts={examQuickFacts} /></div>,
     researchLens: (
-      <div>
-        <SectionLabel icon={FlaskConical}>Research Lens</SectionLabel>
-        {topic.researchLens ? (
-          <p style={{ fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.7, margin: 0, color: T.ink }}>{topic.researchLens}</p>
-        ) : <EmptyState text="No research-lens notes added for this topic yet." />}
+      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+        <div>
+          <SectionLabel icon={FlaskConical}>Research Lens</SectionLabel>
+          {topic.researchLens ? (
+            <p style={{ fontFamily: FONT_BODY, fontSize: 14, lineHeight: 1.7, margin: 0, color: T.ink }}>{topic.researchLens}</p>
+          ) : <EmptyState text="No research-lens notes added for this topic yet." />}
+        </div>
+        <div>
+          <SectionLabel icon={BookOpen}>References</SectionLabel>
+          {references.length > 0 ? <ReferencesList references={references} /> : <EmptyState text="No references added for this topic yet." />}
+        </div>
       </div>
     ),
     practice: dbData ? <TopicPractice dbData={dbData} categoryId={topic.categoryId} topicId={topic.id} /> : <EmptyState text="Practice isn't available in this preview." />,
@@ -2384,7 +2445,7 @@ function AdminImportExport({ dbData, exportContent, importContent }) {
       const text = await file.text();
       const parsed = JSON.parse(text);
       const summary = await importContent(parsed);
-      const parts = Object.entries(summary).map(([k, v]) => `${v} ${k}`).join(", ");
+      const parts = Object.entries(summary).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(", ") || "0 items";
       setMessage({ tone: "ok", text: `Import complete — processed ${parts}.` });
     } catch (err) {
       setMessage({ tone: "error", text: err.message || "That file couldn't be imported. Make sure it's valid JSON in the expected format." });
@@ -2475,12 +2536,12 @@ function AdminCategories({ dbData, addItem, deleteCategory }) {
 function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
   const blank = {
     categoryId: dbData.categories[0]?.id || "", name: "", year: "", summary: "", keyPoints: "", videoUrl: "", resourceLinks: "",
-    difficulty: "", academicLevel: "", examRelevance: "", curriculum: "", phenomena: "", researcherId: "", paradigm: "", examQuickFacts: "", researchLens: "",
+    difficulty: "", academicLevel: "", examRelevance: "", curriculum: "", phenomena: "", researcherId: "", paradigm: "", examQuickFacts: "", researchLens: "", references: "",
   };
   const { form, setForm, editingId, setEditingId, reset } = useEditableForm(blank);
   const startEdit = (t) => {
     setForm({
-      categoryId: t.categoryId, name: t.name, year: t.year, summary: t.summary, keyPoints: t.keyPoints.join("\n"),
+      categoryId: t.categoryId, name: t.name, year: t.year, summary: t.summary, keyPoints: (t.keyPoints || []).join("\n"),
       videoUrl: t.videoUrl || "",
       resourceLinks: (t.resourceLinks || []).map((r) => `${r.label || ""} | ${r.url}`).join("\n"),
       difficulty: t.difficulty || "",
@@ -2489,9 +2550,10 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
       curriculum: (t.curriculum || []).join(", "),
       phenomena: (t.phenomena || []).join("\n"),
       researcherId: t.researcherId || "",
-      paradigm: (t.paradigm || []).map((s) => [s.title, ...s.rows].join("\n")).join("\n\n"),
+      paradigm: (t.paradigm || []).map((s) => [s.title, ...(s.rows || [])].join("\n")).join("\n\n"),
       examQuickFacts: (t.examQuickFacts || []).map((f) => `${f.label}: ${f.value}`).join("\n"),
       researchLens: t.researchLens || "",
+      references: (t.references || []).map(formatReference).join("\n"),
     });
     setEditingId(t.id);
   };
@@ -2526,6 +2588,7 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
       paradigm,
       examQuickFacts,
       researchLens: form.researchLens.trim(),
+      references: form.references.split("\n").map((s) => s.trim()).filter(Boolean),
     };
     if (editingId) updateItem("topics", editingId, payload); else addItem("topics", payload);
     reset();
@@ -2552,6 +2615,7 @@ function AdminTopics({ dbData, addItem, updateItem, deleteItem }) {
         <Field label="Basic paradigm (blank line between stages; first line of each is the stage title)"><TextArea value={form.paradigm} onChange={(e) => setForm({ ...form, paradigm: e.target.value })} placeholder={"Before Conditioning\nUCS → UCR\nNS → No response\n\nDuring Conditioning\nNS + UCS → UCR\n\nAfter Conditioning\nCS → CR"} style={{ minHeight: 120 }} /></Field>
         <Field label="Exam quick facts (one per line, format: Label: Value)"><TextArea value={form.examQuickFacts} onChange={(e) => setForm({ ...form, examQuickFacts: e.target.value })} placeholder={"Founder/Key Researcher: Ivan Pavlov\nType of Learning: Associative Learning"} /></Field>
         <Field label="Research lens notes (optional)"><TextArea value={form.researchLens} onChange={(e) => setForm({ ...form, researchLens: e.target.value })} placeholder="How this topic is studied / researched, methodological notes, etc." /></Field>
+        <Field label="References (optional — one citation per line)"><TextArea value={form.references} onChange={(e) => setForm({ ...form, references: e.target.value })} placeholder={"James, W. (1890). The Principles of Psychology.\nPosner, M. I., & Petersen, S. E. (1990). ..."} /></Field>
         <div style={{ display: "flex", gap: 8 }}><PrimaryButton type="submit">{editingId ? <><Save size={14} /> Save</> : <><Plus size={14} /> Add topic</>}</PrimaryButton>{editingId && <GhostButton onClick={reset}>Cancel</GhostButton>}</div>
       </form>
     } list={dbData.topics.map((t) => {

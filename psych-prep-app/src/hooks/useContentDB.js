@@ -188,6 +188,20 @@ export function useContentDB(uid) {
     return JSON.parse(JSON.stringify(dbRef.current));
   }, []);
 
+  // A bare single record (or a bare array of them) pasted/exported without
+  // the {"topics": [...], "categories": [...]} wrapper — detected by the
+  // combination of fields that's unique to each content type, so it can be
+  // imported without the person having to hand-wrap it first.
+  const inferListKey = (obj) => {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+    if (typeof obj.categoryId === "string" && typeof obj.year === "string" && "summary" in obj) return "topics";
+    if (typeof obj.categoryId === "string" && typeof obj.years === "string" && "keyIdea" in obj) return "persons";
+    if (typeof obj.categoryId === "string" && typeof obj.question === "string" && Array.isArray(obj.options)) return "quiz";
+    if (typeof obj.categoryId === "string" && "front" in obj && "back" in obj) return "flashcards";
+    if (typeof obj.name === "string" && typeof obj.tint === "string" && !("categoryId" in obj)) return "categories";
+    return null;
+  };
+
   // Imports a previously exported (or hand-edited) content object.
   // Behavior: UPSERT only — items with an existing "id" are updated in place,
   // items without one are created as new documents. Nothing is ever deleted
@@ -197,6 +211,21 @@ export function useContentDB(uid) {
     if (!data || typeof data !== "object") {
       throw new Error("That file doesn't look like a valid content export.");
     }
+
+    // Bare array of records (e.g. exported/copied a list of topics without
+    // the wrapper object) — infer the type from its first item.
+    if (Array.isArray(data)) {
+      const key = inferListKey(data[0]);
+      if (!key) throw new Error("Couldn't tell what kind of content this array contains. Wrap it as, e.g., { \"topics\": [ ... ] } and try again.");
+      data = { [key]: data };
+    } else if (!Object.keys(COLLECTIONS).some((k) => Array.isArray(data[k]))) {
+      // A single bare object (not wrapped, and not already a recognized
+      // { topics: [...] }-style export) — try to infer which content type
+      // it is and wrap it as a one-item list.
+      const key = inferListKey(data);
+      if (key) data = { [key]: [data] };
+    }
+
     const summary = {};
     const ops = [];
     for (const [listKey, collName] of Object.entries(COLLECTIONS)) {
@@ -207,6 +236,9 @@ export function useContentDB(uid) {
         if (id) ops.push({ ref: doc(db, collName, id), data: rest, merge: true });
         else ops.push({ ref: doc(collection(db, collName)), data: rest, merge: false });
       }
+    }
+    if (ops.length === 0) {
+      throw new Error("No recognizable content found in this file — nothing was imported. Check it's either a full export ({ \"topics\": [...], \"categories\": [...], ... }) or a single item / array of items of one content type.");
     }
     // Firestore batches cap at 500 operations — chunk defensively.
     for (let i = 0; i < ops.length; i += 450) {
